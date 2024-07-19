@@ -1,7 +1,7 @@
 const std = @import("std");
 
 /// Logic function performed by the wire
-const WireFunction = enum {
+pub const WireFunction = enum {
     /// If all drivers output 1, the wire's state is 1
     WireAnd,
     /// If at least one driver outputs 1, the wire's state is 1
@@ -10,42 +10,60 @@ const WireFunction = enum {
     WireUniqueDriver
 };
 
-
 /// The logical circuit node (wire). 
 /// 
 /// The Node is where the state of the circuit is remembered between ticks
-const Node = struct {
+pub const Node = struct {
     /// Current state of the node, referenced by connected gates' inputs
     state: bool,
     /// List of references to gates that drive this Node
     drivers: std.ArrayList(*Gate),
 
     /// Initialize the Node object, allocating memory for the drivers' list
-    fn init(alloc: std.mem.Allocator) Node {
+    pub fn init(alloc: std.mem.Allocator) Node {
         return Node {
             .state = false,
             .drivers = std.ArrayList(*Gate).init(alloc)
         };
     }
 
+    pub fn add_driver(self: *Node, gate: *Gate) !void {
+        try self.drivers.append(gate);
+    }
+
     /// Free the memory allocated within the Node
-    fn deinit(self: *Node) void {
+    pub fn deinit(self: *Node) void {
         self.drivers.deinit();
     }
 
     /// Update the state of the Node, based on the drivers' states and the selected wire function
-    fn update(self: *Node, wire_function: WireFunction) void {
+    pub fn update(self: *Node, wire_function: WireFunction) !void {
         self.state = switch(wire_function) {
-            .WireAnd          => false, // --TODO--
-            .WireOr           => false, // --TODO--
-            .WireUniqueDriver => false  // --TODO--
+            // Look for any driver that outputs 0 and set the state to 0 if any were found
+            // If no driver outputs 0 (all output 1), set the state to 1
+            .WireAnd => for(self.drivers.items) |driver| {
+                if(driver.*.output() == false) break false;
+            } else no_zeros: {
+                break :no_zeros true;
+            },
+
+            // Look for any driver that outputs 1 and set the state to 1 if any were found
+            // If no driver outputs 1 (all output 0), set the state to 0
+            .WireOr => for(self.drivers.items) |driver| {
+                if(driver.*.output() == true) break true;
+            } else no_zeros: {
+                break :no_zeros false;
+            },
+
+            // If only one driver is allowed, take the value of the only existing one (should be checked before synthesis)
+            .WireUniqueDriver => if(self.drivers.getLastOrNull()) |driver| driver.*.output() else false
         };
     }
 };
 
 
 /// Type of a logic gate that determines its function
-const GateType = union(enum) {
+pub const GateType = union(enum) {
     // Two-input gates
     And,
     Or,
@@ -63,7 +81,7 @@ const GateType = union(enum) {
 };
 
 
-const Gate = struct {
+pub const Gate = struct {
     /// Gate type
     gate_type: GateType,
 
@@ -73,30 +91,30 @@ const Gate = struct {
     input_b_node: ?*Node,
 
     /// Get the gate's output based on the input Nodes' states and the gate's logic function
-    fn output(self: Gate) bool {
-        const input_a_state = self.input_a_node.?.state orelse false;
-        const input_b_state = self.input_b_node.?.state orelse false;
+    pub fn output(self: Gate) bool {
+        const input_a_state: bool = if(self.input_a_node) |a| a.*.state else false;
+        const input_b_state: bool = if(self.input_b_node) |b| b.*.state else false;
 
         return switch(self.gate_type) {
             // Two-input gates
-            .And   =>   input_a_state & input_b_state,
-            .Or    =>   input_a_state | input_b_state,
-            .Xor   =>   input_a_state ^ input_b_state,
-            .Nand  => !(input_a_state & input_b_state),
-            .Nor   => !(input_a_state | input_b_state),
-            .Xnor  => !(input_a_state ^ input_b_state),
+            .And   =>   input_a_state and input_b_state,
+            .Or    =>   input_a_state or  input_b_state,
+            .Xor   =>  (input_a_state and !input_b_state) or (!input_a_state and input_b_state),
+            .Nand  => !(input_a_state and input_b_state),
+            .Nor   => !(input_a_state or input_b_state),
+            .Xnor  => !(input_a_state and !input_b_state) or (!input_a_state and input_b_state),
 
             // One-input gates
-            .Not   =>  !input_a_state,
-            .Buf   =>   input_a_state,
+            .Not => !input_a_state,
+            .Buf =>  input_a_state,
 
             // input device
-            .Input => |input_state| input_state
+            .Input => |input_state| input_state.*
         };
     }
 
     /// Initialize a new Gate object
-    fn init(gate_type: GateType, input_a_node: ?*Node, input_b_node: ?*Node) Gate {
+    pub fn init(gate_type: GateType, input_a_node: ?*Node, input_b_node: ?*Node) Gate {
         return Gate {
             .gate_type = gate_type,
             .input_a_node = input_a_node,
