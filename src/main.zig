@@ -6,11 +6,13 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();
 
-    const text_netlist: [*:0]const u8 = "example_text";
-    
+    const text_netlist: [*:0]const u8 =
+        \\NOR N1 N2
+        \\AND N2 N3
+    ;
+
     var simulator = try api.Simulator.init(text_netlist, alloc);
     defer simulator.deinit();
-
 
     // --TODO-- Turn the below code into a test block
 
