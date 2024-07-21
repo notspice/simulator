@@ -80,28 +80,63 @@ pub const Gate = struct {
     /// Gate type
     gate_type: GateType,
 
-    /// Optional reference to the Node that is connected to the gate's first input. If null, the input doesn't exist in a given gate.
-    input_a_node: ?*Node,
-    /// Optional reference to the Node that is connected to the gate's second input. If null, the input doesn't exist in a given gate.
-    input_b_node: ?*Node,
+    /// Array of input nodes.
+    inputs: std.ArrayList(*Node),
 
     /// Get the gate's output based on the input Nodes' states and the gate's logic function
     pub fn output(self: Gate) bool {
-        const input_a_state: bool = if (self.input_a_node) |a| a.*.state else false;
-        const input_b_state: bool = if (self.input_b_node) |b| b.*.state else false;
-
         return switch (self.gate_type) {
             // Two-input gates
-            .And => input_a_state and input_b_state,
-            .Or => input_a_state or input_b_state,
-            .Xor => (input_a_state and !input_b_state) or (!input_a_state and input_b_state),
-            .Nand => !(input_a_state and input_b_state),
-            .Nor => !(input_a_state or input_b_state),
-            .Xnor => !(input_a_state and !input_b_state) or (!input_a_state and input_b_state),
+            .And => {
+                var result = true;
+                for (self.inputs.items) |input| {
+                    result = result and input.*.state;
+                }
+                result;
+            },
+            .Or => {
+                var result = false;
+                for (self.inputs.items) |input| {
+                    result = result or input.*.state;
+                }
+                result;
+            },
+            .Xor => {
+                var result = false;
+                for (self.inputs.items) |input| {
+                    if (input.*.state) result = !result;
+                }
+                result;
+            },
+            .Nand => {
+                var result = true;
+                for (self.inputs.items) |input| {
+                    result = result and input.*.state;
+                }
+                !result;
+            },
+            .Nor => {
+                var result = false;
+                for (self.inputs.items) |input| {
+                    result = result or input.*.state;
+                }
+                !result;
+            },
+            .Xnor => {
+                var result = false;
+                for (self.inputs.items) |input| {
+                    if (input.*.state) result = !result;
+                }
+                !result;
+            },
 
             // One-input gates
-            .Not => !input_a_state,
-            .Buf => input_a_state,
+            .Not => {
+                !self.inputs.items[0].*.state;
+            },
+            .Buf => {
+                self.inputs.items[0].*.state;
+            },
 
             // input device
             .Input => |input_state| input_state.*,
@@ -142,10 +177,14 @@ pub const Simulator = struct {
     fn parse_netlist(self: *Simulator, text_netlist: [*:0]const u8) !void {
         _ = self;
 
+        // Convert 0-terminated string to a Zig slice.
+        const text_netlist_length = std.mem.len(text_netlist);
+        const text_netlist_slice = text_netlist[0..text_netlist_length];
+
         // Separate the input text into lines (tokens).
-        var tokens = std.mem.split([*:0]const u8, text_netlist, "\n");
+        var tokens = std.mem.splitSequence(u8, text_netlist_slice, &[_]u8{'\n'});
         while (tokens.next()) |token| {
-            std.debug.print("{}", .{token});
+            std.debug.print("{any}\n", .{token});
         }
     }
 

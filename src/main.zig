@@ -9,6 +9,7 @@ pub fn main() !void {
     const text_netlist: [*:0]const u8 =
         \\NOR N1 N2
         \\AND N2 N3
+        \\XOR N5 N6
     ;
 
     var simulator = try api.Simulator.init(text_netlist, alloc);
@@ -43,11 +44,11 @@ pub fn main() !void {
 
     // Initialize an AND gate and connect it to the declared nodes
     // Try changing the gates and the nodes to something else
-    var gate = api.Gate.init(.And, &node_thats_turned_on, &node_thats_turned_on);
+    // var gate = api.Gate.init(.And, &node_thats_turned_on, &node_thats_turned_on);
 
-    // Get the gate's output and display it
-    const value = gate.output();
+    // // Get the gate's output and display it
+    // const value = gate.output();
 
-    const stdout = std.io.getStdOut().writer();
-    try stdout.print("{}", .{value});
+    // const stdout = std.io.getStdOut().writer();
+    // try stdout.print("{}", .{value});
 }
