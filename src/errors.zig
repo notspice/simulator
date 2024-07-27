@@ -6,5 +6,6 @@ pub const GateInitError = error {
 };
 
 pub const SimulationError = error {
-    TooManyNodeDrivers
+    TooManyNodeDrivers,
+    InvalidGateConnection
 };

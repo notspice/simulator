@@ -44,7 +44,7 @@ pub const Node = struct {
             // Look for any driver that outputs 0 and set the state to 0 if any were found
             // If no driver outputs 0 (all output 1), set the state to 1
             .WireAnd => for (self.drivers.items) |driver| {
-                if (driver.*.output() == false) break false;
+                if ((try driver.*.output()) == false) break false;
             } else no_zeros: {
                 break :no_zeros true;
             },
@@ -52,13 +52,13 @@ pub const Node = struct {
             // Look for any driver that outputs 1 and set the state to 1 if any were found
             // If no driver outputs 1 (all output 0), set the state to 0
             .WireOr => for (self.drivers.items) |driver| {
-                if (driver.*.output() == true) break true;
+                if ((try driver.*.output()) == true) break true;
             } else no_zeros: {
                 break :no_zeros false;
             },
 
             // If only one driver is allowed, return an error in case more drivers are attached
-            .WireUniqueDriver => if (self.drivers.items.len == 1) self.drivers.items[0].*.output() else return errors.SimulationError.TooManyNodeDrivers,
+            .WireUniqueDriver => if (self.drivers.items.len == 1) (try self.drivers.items[0].*.output()) else return errors.SimulationError.TooManyNodeDrivers,
         };
     }
 };
@@ -100,17 +100,17 @@ pub const Gate = union(GateType) {
     pub fn init(comptime gate_type: GateType, input_nodes: std.ArrayList(*Node), external_state: ?*bool) errors.GateInitError!Self {
         const input_nodes_count = input_nodes.items.len;
         const input_nodes_count_valid = switch(gate_type) {
-            .And    => input_nodes_count >= 2,
-            .Or     => input_nodes_count >= 2,
-            .Xor    => input_nodes_count >= 2,
-            .Nand   => input_nodes_count >= 2,
-            .Nor    => input_nodes_count >= 2,
-            .Xnor   => input_nodes_count >= 2,
+            .And   => input_nodes_count >= 2,
+            .Or    => input_nodes_count >= 2,
+            .Xor   => input_nodes_count >= 2,
+            .Nand  => input_nodes_count >= 2,
+            .Nor   => input_nodes_count >= 2,
+            .Xnor  => input_nodes_count >= 2,
 
-            .Not    => input_nodes_count == 1,
-            .Buf    => input_nodes_count == 1,
+            .Not   => input_nodes_count == 1,
+            .Buf   => input_nodes_count == 1,
 
-            .Input  => input_nodes_count == 0
+            .Input => input_nodes_count == 0
         };
         if(!input_nodes_count_valid) {
             return errors.GateInitError.WrongNumberOfInputs;
@@ -123,17 +123,17 @@ pub const Gate = union(GateType) {
         }
         
         return switch(gate_type) {
-            .And  => Self { .And  = input_nodes },
-            .Or   => Self { .Or   = input_nodes },
-            .Xor  => Self { .Xor  = input_nodes },
-            .Nand => Self { .Nand = input_nodes },
-            .Nor  => Self { .Nor  = input_nodes },
-            .Xnor => Self { .Xnor = input_nodes },
+            .And   => Self { .And  = input_nodes },
+            .Or    => Self { .Or   = input_nodes },
+            .Xor   => Self { .Xor  = input_nodes },
+            .Nand  => Self { .Nand = input_nodes },
+            .Nor   => Self { .Nor  = input_nodes },
+            .Xnor  => Self { .Xnor = input_nodes },
 
-            .Not  => Self { .Not = input_nodes },
-            .Buf  => Self { .Buf = input_nodes },
+            .Not   => Self { .Not  = input_nodes },
+            .Buf   => Self { .Buf  = input_nodes },
 
-            .Input => Self { .Input = external_state.? }
+            .Input => Self { .Input = external_state orelse return errors.GateInitError.MissingExternalState }
         };
     }
 
@@ -147,7 +147,7 @@ pub const Gate = union(GateType) {
     }
 
     /// Returns the gate's output based on the input Nodes' states and the Gate's logic function
-    pub fn output(self: Self) bool {
+    pub fn output(self: Self) errors.SimulationError!bool {
         switch(self) {
             // Two-input gates
             .And => |inputs| {
@@ -195,10 +195,12 @@ pub const Gate = union(GateType) {
 
             // One-input gates
             .Not => |inputs| {
-                return !inputs.items[0].state;
+                const input = inputs.getLastOrNull() orelse return errors.SimulationError.InvalidGateConnection;
+                return !input.*.state;
             },
             .Buf => |inputs| {
-                return inputs.items[0].state;
+                const input = inputs.getLastOrNull() orelse return errors.SimulationError.InvalidGateConnection;
+                return input.*.state;
             },
 
             // Input device
@@ -351,22 +353,22 @@ test "two-input logic functions" {
 
         // Assert and print the results
         std.debug.print("Inputs: <{}, {}>\n", .{@intFromBool(input_state1), @intFromBool(input_state2)});
-        std.debug.print("AND:  {d} and  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(and_gate.output())});
-        try expect(and_gate.output()  == (input_state1 and input_state2));
-        std.debug.print("OR:   {d} or   {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(or_gate.output())});
-        try expect(or_gate.output()   == (input_state1 or input_state2));
-        std.debug.print("XOR:  {d} xor  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(xor_gate.output())});
-        try expect(xor_gate.output()  == ((input_state1 and !input_state2) or (!input_state1 and input_state2)));
-        std.debug.print("NAND: {d} nand {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(nand_gate.output())});
-        try expect(nand_gate.output() == !(input_state1 and input_state2));
-        std.debug.print("NOR:  {d} nor  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(nor_gate.output())});
-        try expect(nor_gate.output()  == !(input_state1 or input_state2));
-        std.debug.print("XNOR: {d} xnor {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(xnor_gate.output())});
-        try expect(xnor_gate.output() == !((input_state1 and !input_state2) or (!input_state1 and input_state2)));
-        std.debug.print("NOT:     not {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(not_gate.output())});
-        try expect(not_gate.output() == !input_state1);
-        std.debug.print("BUF:         {d} = {d}\n\n", .{@intFromBool(input_state1), @intFromBool(buf_gate.output())});
-        try expect(buf_gate.output() == input_state1);
+        std.debug.print("AND:  {d} and  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try and_gate.output())});
+        try expect((try and_gate.output())  == (input_state1 and input_state2));
+        std.debug.print("OR:   {d} or   {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try or_gate.output())});
+        try expect((try or_gate.output())   == (input_state1 or input_state2));
+        std.debug.print("XOR:  {d} xor  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try xor_gate.output())});
+        try expect((try xor_gate.output())  == ((input_state1 and !input_state2) or (!input_state1 and input_state2)));
+        std.debug.print("NAND: {d} nand {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try nand_gate.output())});
+        try expect((try nand_gate.output()) == !(input_state1 and input_state2));
+        std.debug.print("NOR:  {d} nor  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try nor_gate.output())});
+        try expect((try nor_gate.output())  == !(input_state1 or input_state2));
+        std.debug.print("XNOR: {d} xnor {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try xnor_gate.output())});
+        try expect((try xnor_gate.output()) == !((input_state1 and !input_state2) or (!input_state1 and input_state2)));
+        std.debug.print("NOT:     not {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(try not_gate.output())});
+        try expect((try not_gate.output())  == !input_state1);
+        std.debug.print("BUF:         {d} = {d}\n\n", .{@intFromBool(input_state1), @intFromBool(try buf_gate.output())});
+        try expect((try buf_gate.output())  == input_state1);
     }
 }
 
