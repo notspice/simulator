@@ -94,13 +94,9 @@ pub const Gate = union(GateType) {
     // Input device, which also holds a reference to an externally controlled bool that indicates whether it's enabled
     Input : *bool,
 
-    /// Initializes the gate object. Takes ownership of the inputs array, must be deallocated using .deinit()
-    pub fn init(comptime gate_type: GateType, input_nodes: anytype, external_state: anytype, alloc: std.mem.Allocator) !Self {
-        const input_nodes_type_info = @typeInfo(@TypeOf(input_nodes));
-        if(input_nodes_type_info != .Struct) {
-            @compileError("Expected tuple or struct, found " ++ @typeName(@TypeOf(input_nodes)));
-        }
-        const input_nodes_count = input_nodes_type_info.Struct.fields.len;
+    /// Initializes the gate object. Accepts an externally allocated list of pointers to Node, must be deinitialized using .deinit()
+    pub fn init(comptime gate_type: GateType, input_nodes: std.ArrayList(*Node), external_state: ?*bool) errors.GateInitError!Self {
+        const input_nodes_count = input_nodes.items.len;
         const input_nodes_count_valid = switch(gate_type) {
             .And    => input_nodes_count >= 2,
             .Or     => input_nodes_count >= 2,
@@ -115,44 +111,27 @@ pub const Gate = union(GateType) {
             .Input  => input_nodes_count == 0
         };
         if(!input_nodes_count_valid) {
-            @compileError("Invalid number of inputs for " ++ @tagName(gate_type) ++ " gate");
+            return errors.GateInitError.WrongNumberOfInputs;
         }
 
-        const external_state_type_info = @typeInfo(@TypeOf(external_state));
-        if(external_state_type_info != .Struct) {
-            @compileError("Expected tuple or struct, found " ++ @typeName(@TypeOf(external_state)));
-        }
-
-        if(gate_type == .Input) {
-            const external_state_count = external_state_type_info.Struct.fields.len;
-            if(external_state_count != 1) {
-                @compileError("Expected exactly 1 external state reference");
-            }
-
-            const external_state_field = external_state_type_info.Struct.fields[0];
-            const external_state_field_type = external_state_field.type;
-            if(external_state_field_type != *bool) {
-                @compileError("Expected field of type *bool, found " ++ @typeName(external_state_field_type));
-            }
-        }
-
-        var input_nodes_array = std.ArrayList(*Node).init(alloc);
-        inline for(input_nodes) |input| {
-            try input_nodes_array.append(input);
+        if(gate_type == .Input and external_state == null) {
+            return errors.GateInitError.MissingExternalState;
+        } else if(gate_type != .Input and external_state != null) {
+            return errors.GateInitError.UnnecessaryExternalState;
         }
         
         return switch(gate_type) {
-            .And  => Self { .And  = input_nodes_array },
-            .Or   => Self { .Or   = input_nodes_array },
-            .Xor  => Self { .Xor  = input_nodes_array },
-            .Nand => Self { .Nand = input_nodes_array },
-            .Nor  => Self { .Nor  = input_nodes_array },
-            .Xnor => Self { .Xnor = input_nodes_array },
+            .And  => Self { .And  = input_nodes },
+            .Or   => Self { .Or   = input_nodes },
+            .Xor  => Self { .Xor  = input_nodes },
+            .Nand => Self { .Nand = input_nodes },
+            .Nor  => Self { .Nor  = input_nodes },
+            .Xnor => Self { .Xnor = input_nodes },
 
-            .Not  => Self { .Not = input_nodes_array },
-            .Buf  => Self { .Buf = input_nodes_array },
+            .Not  => Self { .Not = input_nodes },
+            .Buf  => Self { .Buf = input_nodes },
 
-            .Input => Self { .Input = external_state[0] }
+            .Input => Self { .Input = external_state.? }
         };
     }
 
@@ -227,7 +206,22 @@ pub const Gate = union(GateType) {
     }
 };
 
-test "two-input logic functions" {
+fn test_array_of_2_inputs(node1: *Node, node2: *Node, alloc: std.mem.Allocator) !std.ArrayList(*Node) {
+    var array_of_2_inputs = std.ArrayList(*Node).init(alloc);
+    try array_of_2_inputs.append(node1);
+    try array_of_2_inputs.append(node2);
+
+    return array_of_2_inputs;
+}
+
+fn test_array_of_1_input(node: *Node, alloc: std.mem.Allocator) !std.ArrayList(*Node) {
+    var array_of_1_input = std.ArrayList(*Node).init(alloc);
+    try array_of_1_input.append(node);
+
+    return array_of_1_input;
+}
+
+test "two-input logic functions with runtime checks" {
     var node1 = Node.init(std.testing.allocator);
     defer node1.deinit();
     var node2 = Node.init(std.testing.allocator);
@@ -246,10 +240,10 @@ test "two-input logic functions" {
         var input_state1 = input_states[0];
         var input_state2 = input_states[1];
 
-        var input1 = try Gate.init(.Input, .{}, .{&input_state1}, std.testing.allocator);
+        var input1 = try Gate.init(.Input, std.ArrayList(*Node).init(std.testing.allocator), &input_state1);
         defer input1.deinit();
         
-        var input2 = try Gate.init(.Input, .{}, .{&input_state2}, std.testing.allocator);
+        var input2 = try Gate.init(.Input, std.ArrayList(*Node).init(std.testing.allocator), &input_state2);
         defer input2.deinit();
 
         try node1.add_driver(&input1);
@@ -258,28 +252,28 @@ test "two-input logic functions" {
         try node1.update(.WireOr);
         try node2.update(.WireOr);
 
-        var and_gate = try Gate.init(GateType.And, .{&node1, &node2}, .{}, std.testing.allocator);
+        var and_gate = try Gate.init(.And, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
         defer and_gate.deinit();
 
-        var or_gate = try Gate.init(GateType.Or, .{&node1, &node2}, .{}, std.testing.allocator);
+        var or_gate = try Gate.init(.Or, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
         defer or_gate.deinit();
 
-        var xor_gate = try Gate.init(GateType.Xor, .{&node1, &node2}, .{}, std.testing.allocator);
+        var xor_gate = try Gate.init(.Xor, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
         defer xor_gate.deinit();
 
-        var nand_gate = try Gate.init(GateType.Nand, .{&node1, &node2}, .{}, std.testing.allocator);
+        var nand_gate = try Gate.init(.Nand, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
         defer nand_gate.deinit();
 
-        var nor_gate = try Gate.init(GateType.Nor, .{&node1, &node2}, .{}, std.testing.allocator);
+        var nor_gate = try Gate.init(.Nor, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
         defer nor_gate.deinit();
 
-        var xnor_gate = try Gate.init(GateType.Xnor, .{&node1, &node2}, .{}, std.testing.allocator);
+        var xnor_gate = try Gate.init(.Xnor, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
         defer xnor_gate.deinit();
 
-        var not_gate = try Gate.init(GateType.Not, .{&node1}, .{}, std.testing.allocator);
+        var not_gate = try Gate.init(.Not, try test_array_of_1_input(&node1, std.testing.allocator), null);
         defer not_gate.deinit();
 
-        var buf_gate = try Gate.init(GateType.Buf, .{&node1}, .{}, std.testing.allocator);
+        var buf_gate = try Gate.init(.Buf, try test_array_of_1_input(&node1, std.testing.allocator), null);
         defer buf_gate.deinit();
 
         std.debug.print("Inputs: <{}, {}>\n", .{@intFromBool(input_state1), @intFromBool(input_state2)});

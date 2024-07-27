@@ -1,4 +1,6 @@
 pub const GateInitError = error {
     InvalidGateType,
-    WrongNumberOfInputs
+    WrongNumberOfInputs,
+    UnnecessaryExternalState,
+    MissingExternalState
 };
