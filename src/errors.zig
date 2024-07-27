@@ -4,3 +4,7 @@ pub const GateInitError = error {
     UnnecessaryExternalState,
     MissingExternalState
 };
+
+pub const SimulationError = error {
+    TooManyNodeDrivers
+};

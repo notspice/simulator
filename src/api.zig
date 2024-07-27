@@ -1,5 +1,6 @@
 const std = @import("std");
 const expect = std.testing.expect;
+const expectError = std.testing.expectError;
 
 const errors = @import("errors.zig");
 
@@ -37,7 +38,7 @@ pub const Node = struct {
     }
 
     /// Update the state of the Node, based on the drivers' states and the selected wire function
-    pub fn update(self: *Node, wire_function: WireFunction) !void {
+    pub fn update(self: *Node, wire_function: WireFunction) errors.SimulationError!void {
         self.state = switch (wire_function) {
             // Look for any driver that outputs 0 and set the state to 0 if any were found
             // If no driver outputs 0 (all output 1), set the state to 1
@@ -55,8 +56,8 @@ pub const Node = struct {
                 break :no_zeros false;
             },
 
-            // If only one driver is allowed, take the value of the only existing one (should be checked before synthesis)
-            .WireUniqueDriver => if (self.drivers.getLastOrNull()) |driver| driver.*.output() else false,
+            // If only one driver is allowed, return an error
+            .WireUniqueDriver => if (self.drivers.items.len == 1) self.drivers.items[0].*.output() else return errors.SimulationError.TooManyNodeDrivers,
         };
     }
 };
@@ -221,89 +222,6 @@ fn test_array_of_1_input(node: *Node, alloc: std.mem.Allocator) !std.ArrayList(*
     return array_of_1_input;
 }
 
-test "two-input logic functions with runtime checks" {
-    var node1 = Node.init(std.testing.allocator);
-    defer node1.deinit();
-    var node2 = Node.init(std.testing.allocator);
-    defer node2.deinit();
-
-    const input_scenarios = [4][2]bool{
-        .{false, false}, 
-        .{false, true}, 
-        .{true, false}, 
-        .{true, true}
-    };
-
-    std.debug.print("\nTwo-input logic function tests\n\n", .{});
-
-    for(input_scenarios) |input_states| {
-        var input_state1 = input_states[0];
-        var input_state2 = input_states[1];
-
-        var input1 = try Gate.init(.Input, std.ArrayList(*Node).init(std.testing.allocator), &input_state1);
-        defer input1.deinit();
-        
-        var input2 = try Gate.init(.Input, std.ArrayList(*Node).init(std.testing.allocator), &input_state2);
-        defer input2.deinit();
-
-        try node1.add_driver(&input1);
-        try node2.add_driver(&input2);
-
-        try node1.update(.WireOr);
-        try node2.update(.WireOr);
-
-        var and_gate = try Gate.init(.And, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
-        defer and_gate.deinit();
-
-        var or_gate = try Gate.init(.Or, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
-        defer or_gate.deinit();
-
-        var xor_gate = try Gate.init(.Xor, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
-        defer xor_gate.deinit();
-
-        var nand_gate = try Gate.init(.Nand, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
-        defer nand_gate.deinit();
-
-        var nor_gate = try Gate.init(.Nor, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
-        defer nor_gate.deinit();
-
-        var xnor_gate = try Gate.init(.Xnor, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
-        defer xnor_gate.deinit();
-
-        var not_gate = try Gate.init(.Not, try test_array_of_1_input(&node1, std.testing.allocator), null);
-        defer not_gate.deinit();
-
-        var buf_gate = try Gate.init(.Buf, try test_array_of_1_input(&node1, std.testing.allocator), null);
-        defer buf_gate.deinit();
-
-        std.debug.print("Inputs: <{}, {}>\n", .{@intFromBool(input_state1), @intFromBool(input_state2)});
-
-        std.debug.print("AND:  {d} and  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(and_gate.output())});
-        try expect(and_gate.output()  == (input_state1 and input_state2));
-
-        std.debug.print("OR:   {d} or   {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(or_gate.output())});
-        try expect(or_gate.output()   == (input_state1 or input_state2));
-
-        std.debug.print("XOR:  {d} xor  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(xor_gate.output())});
-        try expect(xor_gate.output()  == ((input_state1 and !input_state2) or (!input_state1 and input_state2)));
-
-        std.debug.print("NAND: {d} nand {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(nand_gate.output())});
-        try expect(nand_gate.output() == !(input_state1 and input_state2));
-
-        std.debug.print("NOR:  {d} nor  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(nor_gate.output())});
-        try expect(nor_gate.output()  == !(input_state1 or input_state2));
-
-        std.debug.print("XNOR: {d} xnor {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(xnor_gate.output())});
-        try expect(xnor_gate.output() == !((input_state1 and !input_state2) or (!input_state1 and input_state2)));
-
-        std.debug.print("NOT:     not {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(not_gate.output())});
-        try expect(not_gate.output() == !input_state1);
-
-        std.debug.print("BUF:         {d} = {d}\n\n", .{@intFromBool(input_state1), @intFromBool(buf_gate.output())});
-        try expect(buf_gate.output() == input_state1);
-    }
-}
-
 /// Structure representing the entire state of the Simulator
 pub const Simulator = struct {
     /// Map of Nodes and their IDs. Owns the memory that stores the Nodes.
@@ -368,3 +286,145 @@ pub const Simulator = struct {
         // --TODO--
     }
 };
+
+test "two-input logic functions" {
+    const input_scenarios = [4][2]bool{
+        .{false, false}, 
+        .{false, true}, 
+        .{true, false}, 
+        .{true, true}
+    };
+
+    std.debug.print("\n\n===============================\n", .{});
+    std.debug.print("Two-input logic function tests\n", .{});
+    std.debug.print("===============================\n\n", .{});
+
+    for(input_scenarios) |input_states| {
+        var node1 = Node.init(std.testing.allocator);
+        defer node1.deinit();
+        var node2 = Node.init(std.testing.allocator);
+        defer node2.deinit();
+
+        var input_state1 = input_states[0];
+        var input_state2 = input_states[1];
+
+        var input1 = try Gate.init(.Input, std.ArrayList(*Node).init(std.testing.allocator), &input_state1);
+        defer input1.deinit();
+        
+        var input2 = try Gate.init(.Input, std.ArrayList(*Node).init(std.testing.allocator), &input_state2);
+        defer input2.deinit();
+
+        try node1.add_driver(&input1);
+        try node2.add_driver(&input2);
+
+        try node1.update(.WireUniqueDriver);
+        try node2.update(.WireUniqueDriver);
+
+        var and_gate = try Gate.init(.And, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
+        defer and_gate.deinit();
+
+        var or_gate = try Gate.init(.Or, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
+        defer or_gate.deinit();
+
+        var xor_gate = try Gate.init(.Xor, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
+        defer xor_gate.deinit();
+
+        var nand_gate = try Gate.init(.Nand, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
+        defer nand_gate.deinit();
+
+        var nor_gate = try Gate.init(.Nor, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
+        defer nor_gate.deinit();
+
+        var xnor_gate = try Gate.init(.Xnor, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
+        defer xnor_gate.deinit();
+
+        var not_gate = try Gate.init(.Not, try test_array_of_1_input(&node1, std.testing.allocator), null);
+        defer not_gate.deinit();
+
+        var buf_gate = try Gate.init(.Buf, try test_array_of_1_input(&node1, std.testing.allocator), null);
+        defer buf_gate.deinit();
+
+        std.debug.print("Inputs: <{}, {}>\n", .{@intFromBool(input_state1), @intFromBool(input_state2)});
+
+        std.debug.print("AND:  {d} and  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(and_gate.output())});
+        try expect(and_gate.output()  == (input_state1 and input_state2));
+
+        std.debug.print("OR:   {d} or   {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(or_gate.output())});
+        try expect(or_gate.output()   == (input_state1 or input_state2));
+
+        std.debug.print("XOR:  {d} xor  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(xor_gate.output())});
+        try expect(xor_gate.output()  == ((input_state1 and !input_state2) or (!input_state1 and input_state2)));
+
+        std.debug.print("NAND: {d} nand {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(nand_gate.output())});
+        try expect(nand_gate.output() == !(input_state1 and input_state2));
+
+        std.debug.print("NOR:  {d} nor  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(nor_gate.output())});
+        try expect(nor_gate.output()  == !(input_state1 or input_state2));
+
+        std.debug.print("XNOR: {d} xnor {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(xnor_gate.output())});
+        try expect(xnor_gate.output() == !((input_state1 and !input_state2) or (!input_state1 and input_state2)));
+
+        std.debug.print("NOT:     not {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(not_gate.output())});
+        try expect(not_gate.output() == !input_state1);
+
+        std.debug.print("BUF:         {d} = {d}\n\n", .{@intFromBool(input_state1), @intFromBool(buf_gate.output())});
+        try expect(buf_gate.output() == input_state1);
+    }
+}
+
+test "wire functions" {
+    var node = Node.init(std.testing.allocator);
+    defer node.deinit();
+
+    const input_scenarios = [4][2]bool {
+        .{false, false}, 
+        .{false, true}, 
+        .{true, false}, 
+        .{true, true}
+    };
+
+    const wire_functions = [3]WireFunction{
+        .WireAnd,
+        .WireOr,
+        .WireUniqueDriver
+    };
+
+    std.debug.print("\n\n================\n", .{});
+    std.debug.print("Wire logic tests\n", .{});
+    std.debug.print("================\n\n", .{});
+
+    for(wire_functions) |wire_function| {
+        for(input_scenarios) |input_states| {
+            var input_state1 = input_states[0];
+            var input_state2 = input_states[1];
+
+            var input1 = try Gate.init(.Input, std.ArrayList(*Node).init(std.testing.allocator), &input_state1);
+            defer input1.deinit();
+            
+            var input2 = try Gate.init(.Input, std.ArrayList(*Node).init(std.testing.allocator), &input_state2);
+            defer input2.deinit();
+
+            try node.add_driver(&input1);
+            try node.add_driver(&input2);
+
+            switch(wire_function) {
+                .WireAnd => {
+                    try node.update(wire_function);
+                    std.debug.print("WIRE_AND: {d} and {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(node.state)});
+                    try expect(node.state == (input_state1 and input_state2));
+                },
+                .WireOr => {
+                    try node.update(wire_function);
+                    std.debug.print("WIRE_OR:  {d} or  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(node.state)});
+                    try expect(node.state == (input_state1 or input_state2));
+                },
+                .WireUniqueDriver => {    
+                    try expectError(errors.SimulationError.TooManyNodeDrivers, node.update(wire_function));
+                    std.debug.print("WIRE_UNIQUE_DRIVER: More than 1 driver\n", .{});
+                }
+            }
+        }
+    }
+
+    std.debug.print("\n", .{});
+}
