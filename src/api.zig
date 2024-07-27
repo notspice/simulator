@@ -227,7 +227,7 @@ pub const Gate = union(GateType) {
     }
 };
 
-test "logic functions" {
+test "two-input logic functions" {
     var node1 = Node.init(std.testing.allocator);
     defer node1.deinit();
     var node2 = Node.init(std.testing.allocator);
@@ -240,7 +240,7 @@ test "logic functions" {
         .{true, true}
     };
 
-    std.debug.print("\nLogic function tests\n\n", .{});
+    std.debug.print("\nTwo-input logic function tests\n\n", .{});
 
     for(input_scenarios) |input_states| {
         var input_state1 = input_states[0];
