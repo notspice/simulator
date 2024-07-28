@@ -7,6 +7,8 @@ const utils = @import("utils.zig");
 
 const errors = @import("errors.zig");
 
+const testutils = @import("testutils.zig");
+
 /// Logic function performed by the wire
 pub const WireFunction = enum {
     /// If all drivers output 1, the wire's state is 1
@@ -68,13 +70,19 @@ pub const Node = struct {
 
 pub const GateType = enum {
     // Two-input gates
-    And, Or, Xor, Nand, Nor, Xnor,
+    And,
+    Or,
+    Xor,
+    Nand,
+    Nor,
+    Xnor,
 
     // One-input gates
-    Not, Buf,
+    Not,
+    Buf,
 
     // Ports
-    Input
+    Input,
 };
 
 /// Representation of a gate, with its type and input nodes
@@ -85,83 +93,83 @@ pub const Gate = union(GateType) {
     const InputList = std.ArrayList(*Node);
 
     // Two-input gates and their inputs
-    And  : InputList,
-    Or   : InputList,
-    Xor  : InputList,
-    Nand : InputList,
-    Nor  : InputList,
-    Xnor : InputList,
+    And: InputList,
+    Or: InputList,
+    Xor: InputList,
+    Nand: InputList,
+    Nor: InputList,
+    Xnor: InputList,
 
     // One-input gates
-    Not : InputList,
-    Buf : InputList,
+    Not: InputList,
+    Buf: InputList,
 
     // Input device, which also holds a reference to an externally controlled bool that indicates whether it's enabled
-    Input : *bool,
+    Input: *bool,
 
     /// Initializes the Gate object. Accepts an externally allocated list of pointers to Node, takes responsibility for deallocating. Must be deinitialized using .deinit()
     pub fn init(gate_type: GateType, input_nodes: std.ArrayList(*Node), external_state: ?*bool) errors.GateInitError!Self {
         // Check if the number of inputs is correct for the given gate type
         const input_nodes_count = input_nodes.items.len;
-        const input_nodes_count_valid = switch(gate_type) {
-            .And   => input_nodes_count >= 2,
-            .Or    => input_nodes_count >= 2,
-            .Xor   => input_nodes_count >= 2,
-            .Nand  => input_nodes_count >= 2,
-            .Nor   => input_nodes_count >= 2,
-            .Xnor  => input_nodes_count >= 2,
+        const input_nodes_count_valid = switch (gate_type) {
+            .And => input_nodes_count >= 2,
+            .Or => input_nodes_count >= 2,
+            .Xor => input_nodes_count >= 2,
+            .Nand => input_nodes_count >= 2,
+            .Nor => input_nodes_count >= 2,
+            .Xnor => input_nodes_count >= 2,
 
-            .Not   => input_nodes_count == 1,
-            .Buf   => input_nodes_count == 1,
+            .Not => input_nodes_count == 1,
+            .Buf => input_nodes_count == 1,
 
-            .Input => input_nodes_count == 0
+            .Input => input_nodes_count == 0,
         };
-        if(!input_nodes_count_valid) {
+        if (!input_nodes_count_valid) {
             input_nodes.deinit();
             return errors.GateInitError.WrongNumberOfInputs;
         }
 
         // Check if the external state reference for Inputs is provided as required
-        if(gate_type == .Input and external_state == null) {
+        if (gate_type == .Input and external_state == null) {
             input_nodes.deinit();
             return errors.GateInitError.MissingExternalState;
-        } else if(gate_type != .Input and external_state != null) {
+        } else if (gate_type != .Input and external_state != null) {
             input_nodes.deinit();
             return errors.GateInitError.UnnecessaryExternalState;
         }
 
         // Immediately deallocate input_nodes if the Gate is an Input
-        if(gate_type == .Input) {
+        if (gate_type == .Input) {
             input_nodes.deinit();
         }
-        
-        return switch(gate_type) {
-            .And   => Self { .And  = input_nodes },
-            .Or    => Self { .Or   = input_nodes },
-            .Xor   => Self { .Xor  = input_nodes },
-            .Nand  => Self { .Nand = input_nodes },
-            .Nor   => Self { .Nor  = input_nodes },
-            .Xnor  => Self { .Xnor = input_nodes },
 
-            .Not   => Self { .Not  = input_nodes },
-            .Buf   => Self { .Buf  = input_nodes },
+        return switch (gate_type) {
+            .And => Self{ .And = input_nodes },
+            .Or => Self{ .Or = input_nodes },
+            .Xor => Self{ .Xor = input_nodes },
+            .Nand => Self{ .Nand = input_nodes },
+            .Nor => Self{ .Nor = input_nodes },
+            .Xnor => Self{ .Xnor = input_nodes },
 
-            .Input => Self { .Input = external_state orelse return errors.GateInitError.MissingExternalState }
+            .Not => Self{ .Not = input_nodes },
+            .Buf => Self{ .Buf = input_nodes },
+
+            .Input => Self{ .Input = external_state orelse return errors.GateInitError.MissingExternalState },
         };
     }
 
     /// Deinitializes the Gate object, freeing its memory
     pub fn deinit(self: Gate) void {
-        switch(self) {
+        switch (self) {
             .And, .Or, .Xor, .Nand, .Nor, .Xnor, .Not, .Buf => |*inputs| inputs.deinit(),
 
-            else => {}
+            else => {},
         }
     }
 
     /// Returns the gate's output based on the input Nodes' states and the Gate's logic function
     pub fn output(self: Self) errors.SimulationError!bool {
-        switch(self) {
+        switch (self) {
             // Two-input gates
             .And => |inputs| {
                 var result = true;
@@ -219,7 +227,7 @@ pub const Gate = union(GateType) {
             // Input device
             .Input => |external_state| {
                 return external_state.*;
-            }
+            },
         }
     }
 };
@@ -257,12 +265,7 @@ pub const Simulator = struct {
 
     /// Initializes the Simulator object. Allocates memory for the Nodes' and Gates' lists and builds the internal netlist based on the provided text representation
     pub fn init(text_netlist: [*:0]const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!Self {
-        var simulator: Self = .{ 
-            .circuit_name = &.{},
-            .nodes = std.StringArrayHashMap(Node).init(alloc),
-            .gates = std.ArrayList(Gate).init(alloc),
-            .input_states = std.ArrayList(bool).init(alloc)
-        };
+        var simulator: Self = .{ .circuit_name = &.{}, .nodes = std.StringArrayHashMap(Node).init(alloc), .gates = std.ArrayList(Gate).init(alloc), .input_states = std.ArrayList(bool).init(alloc) };
 
         try simulator.parseNetlist(text_netlist, alloc);
 
@@ -271,12 +274,12 @@ pub const Simulator = struct {
 
     /// Deinitializes the Simulator, freeing its memory
     pub fn deinit(self: *Simulator) void {
-        for(self.nodes.keys()) |key| {
+        for (self.nodes.keys()) |key| {
             self.nodes.getPtr(key).?.*.deinit();
         }
         self.nodes.deinit();
 
-        for(self.gates.items) |gate| {
+        for (self.gates.items) |gate| {
             gate.deinit();
         }
         self.gates.deinit();
@@ -303,8 +306,8 @@ pub const Simulator = struct {
         var output_names = std.mem.tokenizeAny(u8, outputs_section, " ");
 
         // Parse the instance_name_pascal string into a GateType enum variant
-        const gate_type: GateType = loop: inline for(@typeInfo(GateType).Enum.fields) |field| {
-            if(std.mem.eql(u8, field.name, instance_name_pascal)) {
+        const gate_type: GateType = loop: inline for (@typeInfo(GateType).Enum.fields) |field| {
+            if (std.mem.eql(u8, field.name, instance_name_pascal)) {
                 break :loop @enumFromInt(field.value);
             }
         } else {
@@ -313,13 +316,13 @@ pub const Simulator = struct {
 
         // Allocate the input Nodes array and fill it with Nodes, creating new ones if a given name didn't exist in the list
         var inputs_array = std.ArrayList(*Node).init(alloc);
-        while(input_names.next()) |input_name| {
+        while (input_names.next()) |input_name| {
             const stripped_input_name = utils.strip(input_name);
-            if(!self.nodes.contains(stripped_input_name)) {
+            if (!self.nodes.contains(stripped_input_name)) {
                 try self.nodes.put(stripped_input_name, Node.init(alloc));
             }
 
-            if(self.nodes.getPtr(stripped_input_name)) |node_ptr| {
+            if (self.nodes.getPtr(stripped_input_name)) |node_ptr| {
                 try inputs_array.append(node_ptr);
             } else {
                 return errors.ParserError.NodeNotFound;
@@ -328,7 +331,7 @@ pub const Simulator = struct {
 
         // Create the new Gate object and pass the input Nodes array to it
         const gate = new_gate: {
-            if(gate_type == .Input) {
+            if (gate_type == .Input) {
                 try self.input_states.append(false);
                 const input_states_len = self.input_states.items.len;
                 const last_input_state_ptr = &self.input_states.items[input_states_len - 1];
@@ -344,13 +347,13 @@ pub const Simulator = struct {
         const last_gate_ptr = &self.gates.items[gates_len - 1];
 
         // Assign the Gate as the driver of the Nodes that are listed as its outputs
-        while(output_names.next()) |output_name| {
+        while (output_names.next()) |output_name| {
             const stripped_output_name = utils.strip(output_name);
-            if(!self.nodes.contains(stripped_output_name)) {
+            if (!self.nodes.contains(stripped_output_name)) {
                 try self.nodes.put(stripped_output_name, Node.init(alloc));
             }
 
-            if(self.nodes.getPtr(stripped_output_name)) |node_ptr| {
+            if (self.nodes.getPtr(stripped_output_name)) |node_ptr| {
                 try node_ptr.*.add_driver(last_gate_ptr);
             } else {
                 return errors.ParserError.NodeNotFound;
@@ -369,7 +372,7 @@ pub const Simulator = struct {
         var line_nr: usize = 0;
         while (lines.next()) |line| : (line_nr += 1) {
             // Store the first line of the netlist file as the circuit name
-            if(line_nr == 0) {
+            if (line_nr == 0) {
                 self.circuit_name = line;
             } else {
                 try self.handleLine(line, alloc);
@@ -386,7 +389,7 @@ pub const Simulator = struct {
 
     /// Calculates the new states of all Nodes, advancing the simulation by one step
     pub fn tick(self: *Self) errors.SimulationError!void {
-        for(self.nodes.keys()) |key| {
+        for (self.nodes.keys()) |key| {
             try self.nodes.getPtr(key).?.*.update(.WireOr);
         }
     }
@@ -402,19 +405,12 @@ pub const Simulator = struct {
 
 test "two-input logic functions" {
     // Array of all possible combinations of the inputs
-    const input_scenarios = [4][2]bool{
-        .{false, false}, 
-        .{false, true}, 
-        .{true, false}, 
-        .{true, true}
-    };
+    const input_scenarios = [4][2]bool{ .{ false, false }, .{ false, true }, .{ true, false }, .{ true, true } };
 
-    std.debug.print("\n\n===============================\n", .{});
-    std.debug.print("Two-input logic function tests\n", .{});
-    std.debug.print("===============================\n\n", .{});
+    testutils.testTitle("Two-input logic function tests");
 
     // Go over each combination of inputs
-    for(input_scenarios) |input_states| {
+    for (input_scenarios) |input_states| {
         // Initialize the Nodes
         var node1 = Node.init(std.testing.allocator);
         defer node1.deinit();
@@ -458,49 +454,38 @@ test "two-input logic functions" {
         defer buf_gate.deinit();
 
         // Assert and print the results
-        std.debug.print("Inputs: <{}, {}>\n", .{@intFromBool(input_state1), @intFromBool(input_state2)});
-        std.debug.print("AND:  {d} and  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try and_gate.output())});
-        try expect((try and_gate.output())  == (input_state1 and input_state2));
-        std.debug.print("OR:   {d} or   {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try or_gate.output())});
-        try expect((try or_gate.output())   == (input_state1 or input_state2));
-        std.debug.print("XOR:  {d} xor  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try xor_gate.output())});
-        try expect((try xor_gate.output())  == ((input_state1 and !input_state2) or (!input_state1 and input_state2)));
-        std.debug.print("NAND: {d} nand {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try nand_gate.output())});
+        std.debug.print("Inputs: <{}, {}>\n", .{ @intFromBool(input_state1), @intFromBool(input_state2) });
+        std.debug.print("AND:  {d} and  {d} = {d}\n", .{ @intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try and_gate.output()) });
+        try expect((try and_gate.output()) == (input_state1 and input_state2));
+        std.debug.print("OR:   {d} or   {d} = {d}\n", .{ @intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try or_gate.output()) });
+        try expect((try or_gate.output()) == (input_state1 or input_state2));
+        std.debug.print("XOR:  {d} xor  {d} = {d}\n", .{ @intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try xor_gate.output()) });
+        try expect((try xor_gate.output()) == ((input_state1 and !input_state2) or (!input_state1 and input_state2)));
+        std.debug.print("NAND: {d} nand {d} = {d}\n", .{ @intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try nand_gate.output()) });
         try expect((try nand_gate.output()) == !(input_state1 and input_state2));
-        std.debug.print("NOR:  {d} nor  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try nor_gate.output())});
-        try expect((try nor_gate.output())  == !(input_state1 or input_state2));
-        std.debug.print("XNOR: {d} xnor {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try xnor_gate.output())});
+        std.debug.print("NOR:  {d} nor  {d} = {d}\n", .{ @intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try nor_gate.output()) });
+        try expect((try nor_gate.output()) == !(input_state1 or input_state2));
+        std.debug.print("XNOR: {d} xnor {d} = {d}\n", .{ @intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(try xnor_gate.output()) });
         try expect((try xnor_gate.output()) == !((input_state1 and !input_state2) or (!input_state1 and input_state2)));
-        std.debug.print("NOT:     not {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(try not_gate.output())});
-        try expect((try not_gate.output())  == !input_state1);
-        std.debug.print("BUF:         {d} = {d}\n\n", .{@intFromBool(input_state1), @intFromBool(try buf_gate.output())});
-        try expect((try buf_gate.output())  == input_state1);
+        std.debug.print("NOT:     not {d} = {d}\n", .{ @intFromBool(input_state1), @intFromBool(try not_gate.output()) });
+        try expect((try not_gate.output()) == !input_state1);
+        std.debug.print("BUF:         {d} = {d}\n\n", .{ @intFromBool(input_state1), @intFromBool(try buf_gate.output()) });
+        try expect((try buf_gate.output()) == input_state1);
     }
 }
 
 test "wire functions" {
     // Array of all possible combinations of the inputs
-    const input_scenarios = [4][2]bool {
-        .{false, false}, 
-        .{false, true}, 
-        .{true, false}, 
-        .{true, true}
-    };
+    const input_scenarios = [4][2]bool{ .{ false, false }, .{ false, true }, .{ true, false }, .{ true, true } };
 
     // Array of all possible wire functions
-    const wire_functions = [3]WireFunction{
-        .WireAnd,
-        .WireOr,
-        .WireUniqueDriver
-    };
+    const wire_functions = [3]WireFunction{ .WireAnd, .WireOr, .WireUniqueDriver };
 
-    std.debug.print("\n\n================\n", .{});
-    std.debug.print("Wire logic tests\n", .{});
-    std.debug.print("================\n\n", .{});
+    testutils.testTitle("Wire logic tests");
 
     // Go over every combination of inputs and wire functions
-    for(wire_functions) |wire_function| {
-        for(input_scenarios) |input_states| {
+    for (wire_functions) |wire_function| {
+        for (input_scenarios) |input_states| {
             // Initialize a single Node
             var node = Node.init(std.testing.allocator);
             defer node.deinit();
@@ -520,21 +505,21 @@ test "wire functions" {
             try node.add_driver(&input2);
 
             // Assert and print the results
-            switch(wire_function) {
+            switch (wire_function) {
                 .WireAnd => {
                     try node.update(wire_function);
-                    std.debug.print("WIRE_AND: {d} and {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(node.state)});
+                    std.debug.print("WIRE_AND: {d} and {d} = {d}\n", .{ @intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(node.state) });
                     try expect(node.state == (input_state1 and input_state2));
                 },
                 .WireOr => {
                     try node.update(wire_function);
-                    std.debug.print("WIRE_OR:  {d} or  {d} = {d}\n", .{@intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(node.state)});
+                    std.debug.print("WIRE_OR:  {d} or  {d} = {d}\n", .{ @intFromBool(input_state1), @intFromBool(input_state2), @intFromBool(node.state) });
                     try expect(node.state == (input_state1 or input_state2));
                 },
-                .WireUniqueDriver => {    
+                .WireUniqueDriver => {
                     try expectError(errors.SimulationError.TooManyNodeDrivers, node.update(wire_function));
                     std.debug.print("WIRE_UNIQUE_DRIVER: More than 1 driver\n", .{});
-                }
+                },
             }
         }
     }
