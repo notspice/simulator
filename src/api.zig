@@ -1,6 +1,9 @@
 const std = @import("std");
+
 const expect = std.testing.expect;
 const expectError = std.testing.expectError;
+
+const utils = @import("utils.zig");
 
 const errors = @import("errors.zig");
 
@@ -29,7 +32,7 @@ pub const Node = struct {
     }
 
     /// Connect the output of a gate to this Node
-    pub fn add_driver(self: *Node, gate: *Gate) !void {
+    pub fn add_driver(self: *Node, gate: *Gate) std.mem.Allocator.Error!void {
         try self.drivers.append(gate);
     }
 
@@ -97,7 +100,8 @@ pub const Gate = union(GateType) {
     Input : *bool,
 
     /// Initializes the Gate object. Accepts an externally allocated list of pointers to Node, takes responsibility for deallocating. Must be deinitialized using .deinit()
-    pub fn init(comptime gate_type: GateType, input_nodes: std.ArrayList(*Node), external_state: ?*bool) errors.GateInitError!Self {
+    pub fn init(gate_type: GateType, input_nodes: std.ArrayList(*Node), external_state: ?*bool) errors.GateInitError!Self {
+        // Check if the number of inputs is correct for the given gate type
         const input_nodes_count = input_nodes.items.len;
         const input_nodes_count_valid = switch(gate_type) {
             .And   => input_nodes_count >= 2,
@@ -113,13 +117,22 @@ pub const Gate = union(GateType) {
             .Input => input_nodes_count == 0
         };
         if(!input_nodes_count_valid) {
+            input_nodes.deinit();
             return errors.GateInitError.WrongNumberOfInputs;
         }
 
+        // Check if the external state reference for Inputs is provided as required
         if(gate_type == .Input and external_state == null) {
+            input_nodes.deinit();
             return errors.GateInitError.MissingExternalState;
         } else if(gate_type != .Input and external_state != null) {
+            input_nodes.deinit();
             return errors.GateInitError.UnnecessaryExternalState;
+        }
+
+        // Immediately deallocate input_nodes if the Gate is an Input
+        if(gate_type == .Input) {
+            input_nodes.deinit();
         }
         
         return switch(gate_type) {
@@ -212,7 +225,7 @@ pub const Gate = union(GateType) {
 };
 
 /// Testing function that creates an array of 2 inputs
-fn test_array_of_2_inputs(node1: *Node, node2: *Node, alloc: std.mem.Allocator) !std.ArrayList(*Node) {
+fn testArrayOf2Inputs(node1: *Node, node2: *Node, alloc: std.mem.Allocator) !std.ArrayList(*Node) {
     var array_of_2_inputs = std.ArrayList(*Node).init(alloc);
     try array_of_2_inputs.append(node1);
     try array_of_2_inputs.append(node2);
@@ -221,7 +234,7 @@ fn test_array_of_2_inputs(node1: *Node, node2: *Node, alloc: std.mem.Allocator) 
 }
 
 /// Testing function that creates an array of 1 input
-fn test_array_of_1_input(node: *Node, alloc: std.mem.Allocator) !std.ArrayList(*Node) {
+fn testArrayOf1Input(node: *Node, alloc: std.mem.Allocator) !std.ArrayList(*Node) {
     var array_of_1_input = std.ArrayList(*Node).init(alloc);
     try array_of_1_input.append(node);
 
@@ -230,63 +243,147 @@ fn test_array_of_1_input(node: *Node, alloc: std.mem.Allocator) !std.ArrayList(*
 
 /// Structure representing the entire state of the Simulator
 pub const Simulator = struct {
+    /// Alias for the type of this struct
+    const Self = @This();
+
+    /// Circuit name obtained from the first line of the netlist file
+    circuit_name: []const u8,
     /// List of Nodes in the circuit. Owns the memory that stores the Nodes.
-    nodes: std.ArrayList(Node),
+    nodes: std.StringArrayHashMap(Node),
     /// List of Gates in the circuit. Owns the memory that stores the Gates.
     gates: std.ArrayList(Gate),
+    /// List of input states used to influence the Inputs in the circuit
+    input_states: std.ArrayList(bool),
 
     /// Initializes the Simulator object. Allocates memory for the Nodes' and Gates' lists and builds the internal netlist based on the provided text representation
-    pub fn init(text_netlist: [*:0]const u8, alloc: std.mem.Allocator) !Simulator {
-        var simulator: Simulator = .{ 
-            .nodes = std.ArrayList(Node).init(alloc),
-            .gates = std.ArrayList(Gate).init(alloc) 
+    pub fn init(text_netlist: [*:0]const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!Self {
+        var simulator: Self = .{ 
+            .circuit_name = &.{},
+            .nodes = std.StringArrayHashMap(Node).init(alloc),
+            .gates = std.ArrayList(Gate).init(alloc),
+            .input_states = std.ArrayList(bool).init(alloc)
         };
 
-        try simulator.parse_netlist(text_netlist);
+        try simulator.parseNetlist(text_netlist, alloc);
 
         return simulator;
     }
 
     /// Deinitializes the Simulator, freeing its memory
     pub fn deinit(self: *Simulator) void {
+        for(self.nodes.keys()) |key| {
+            self.nodes.getPtr(key).?.*.deinit();
+        }
         self.nodes.deinit();
+
+        for(self.gates.items) |gate| {
+            gate.deinit();
+        }
         self.gates.deinit();
+        self.input_states.deinit();
+    }
+
+    fn handleLine(self: *Self, line: []const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
+        const colon_index = std.mem.indexOf(u8, line, ":") orelse return errors.ParserError.ColonNotFound;
+        const arrow_index = std.mem.indexOf(u8, line, "->") orelse return errors.ParserError.ArrowNotFound;
+
+        const instance_section = line[0..colon_index];
+        const inputs_section = line[(colon_index + 1)..arrow_index];
+        const outputs_section = line[(arrow_index + 2)..];
+
+        const instance_name = utils.strip(instance_section);
+        const instance_name_pascal = try utils.pascal(instance_name, alloc);
+        defer alloc.free(instance_name_pascal);
+
+        var input_names = std.mem.tokenizeAny(u8, inputs_section, " ");
+        var output_names = std.mem.tokenizeAny(u8, outputs_section, " ");
+
+        const gate_type: GateType = loop: inline for(@typeInfo(GateType).Enum.fields) |field| {
+            if(std.mem.eql(u8, field.name, instance_name_pascal)) {
+                break :loop @enumFromInt(field.value);
+            }
+        } else {
+            return errors.ParserError.InvalidGateInstanceName;
+        };
+
+        var inputs_array = std.ArrayList(*Node).init(alloc);
+        while(input_names.next()) |input_name| {
+            const stripped_input_name = utils.strip(input_name);
+            if(!self.nodes.contains(stripped_input_name)) {
+                try self.nodes.put(stripped_input_name, Node.init(alloc));
+            }
+
+            if(self.nodes.getPtr(stripped_input_name)) |node_ptr| {
+                try inputs_array.append(node_ptr);
+            } else {
+                return errors.ParserError.NodeNotFound;
+            }
+        }
+
+        const gate = new_gate: {
+            if(gate_type == .Input) {
+                try self.input_states.append(false);
+                const input_states_len = self.input_states.items.len;
+                const last_input_state_ptr = &self.input_states.items[input_states_len - 1];
+                break :new_gate try Gate.init(gate_type, inputs_array, last_input_state_ptr);
+            } else {
+                break :new_gate try Gate.init(gate_type, inputs_array, null);
+            }
+        };
+
+        try self.gates.append(gate);
+        const gates_len = self.gates.items.len;
+        const last_gate_ptr = &self.gates.items[gates_len - 1];
+
+        while(output_names.next()) |output_name| {
+            const stripped_output_name = utils.strip(output_name);
+            if(!self.nodes.contains(stripped_output_name)) {
+                try self.nodes.put(stripped_output_name, Node.init(alloc));
+            }
+
+            if(self.nodes.getPtr(stripped_output_name)) |node_ptr| {
+                try node_ptr.*.add_driver(last_gate_ptr);
+            } else {
+                return errors.ParserError.NodeNotFound;
+            }
+        }
     }
 
     /// Takes the text representation of the netlist and transforms it into appropriately connected Nodes and Gates
-    fn parse_netlist(self: *Simulator, text_netlist: [*:0]const u8) !void {
-
-        // --TODO--
-
-        _ = self;
-
+    fn parseNetlist(self: *Self, text_netlist: [*:0]const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
         // Convert 0-terminated string to a Zig slice.
         const text_netlist_length = std.mem.len(text_netlist);
         const text_netlist_slice = text_netlist[0..text_netlist_length];
 
         // Separate the input text into lines (tokens).
-        var tokens = std.mem.splitSequence(u8, text_netlist_slice, &[_]u8{'\n'});
-        while (tokens.next()) |token| {
-            std.debug.print("{any}\n", .{token});
+        var lines = std.mem.tokenizeAny(u8, text_netlist_slice, "\n");
+        var line_nr: usize = 0;
+        while (lines.next()) |line| : (line_nr += 1) {
+            // Store the first line of the netlist file as the circuit name
+            if(line_nr == 0) {
+                self.circuit_name = line;
+            } else {
+                try self.handleLine(line, alloc);
+            }
         }
     }
 
     /// Resets the Nodes to their initial state
-    pub fn reset(self: *Simulator) void {
+    pub fn reset(self: *Self) void {
         _ = self;
 
         // --TODO--
     }
 
     /// Calculates the new states of all Nodes, advancing the simulation by one step
-    pub fn tick(self: *Simulator) void {
-        _ = self;
-
-        // --TODO--
+    pub fn tick(self: *Self) errors.SimulationError!void {
+        for(self.nodes.keys()) |key| {
+            try self.nodes.getPtr(key).?.*.update(.WireOr);
+        }
     }
 
     /// Probes for the state of a particular node
-    pub fn get_node_state(self: Simulator, node_index: u32) bool {
+    pub fn getNodeState(self: Self, node_index: u32) bool {
         _ = self;
         _ = node_index;
 
@@ -334,21 +431,21 @@ test "two-input logic functions" {
         try node2.update(.WireUniqueDriver);
 
         // Initialize and connect one of each gate type
-        var and_gate = try Gate.init(.And, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
+        var and_gate = try Gate.init(.And, try testArrayOf2Inputs(&node1, &node2, std.testing.allocator), null);
         defer and_gate.deinit();
-        var or_gate = try Gate.init(.Or, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
+        var or_gate = try Gate.init(.Or, try testArrayOf2Inputs(&node1, &node2, std.testing.allocator), null);
         defer or_gate.deinit();
-        var xor_gate = try Gate.init(.Xor, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
+        var xor_gate = try Gate.init(.Xor, try testArrayOf2Inputs(&node1, &node2, std.testing.allocator), null);
         defer xor_gate.deinit();
-        var nand_gate = try Gate.init(.Nand, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
+        var nand_gate = try Gate.init(.Nand, try testArrayOf2Inputs(&node1, &node2, std.testing.allocator), null);
         defer nand_gate.deinit();
-        var nor_gate = try Gate.init(.Nor, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
+        var nor_gate = try Gate.init(.Nor, try testArrayOf2Inputs(&node1, &node2, std.testing.allocator), null);
         defer nor_gate.deinit();
-        var xnor_gate = try Gate.init(.Xnor, try test_array_of_2_inputs(&node1, &node2, std.testing.allocator), null);
+        var xnor_gate = try Gate.init(.Xnor, try testArrayOf2Inputs(&node1, &node2, std.testing.allocator), null);
         defer xnor_gate.deinit();
-        var not_gate = try Gate.init(.Not, try test_array_of_1_input(&node1, std.testing.allocator), null);
+        var not_gate = try Gate.init(.Not, try testArrayOf1Input(&node1, std.testing.allocator), null);
         defer not_gate.deinit();
-        var buf_gate = try Gate.init(.Buf, try test_array_of_1_input(&node1, std.testing.allocator), null);
+        var buf_gate = try Gate.init(.Buf, try testArrayOf1Input(&node1, std.testing.allocator), null);
         defer buf_gate.deinit();
 
         // Assert and print the results
