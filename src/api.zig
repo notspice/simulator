@@ -284,20 +284,25 @@ pub const Simulator = struct {
     }
 
     fn handleLine(self: *Self, line: []const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
+        // Find the location of the colon and arrow that separate the instance, input list and output list
         const colon_index = std.mem.indexOf(u8, line, ":") orelse return errors.ParserError.ColonNotFound;
         const arrow_index = std.mem.indexOf(u8, line, "->") orelse return errors.ParserError.ArrowNotFound;
 
+        // Slice the line contents to obtain the three sections
         const instance_section = line[0..colon_index];
         const inputs_section = line[(colon_index + 1)..arrow_index];
         const outputs_section = line[(arrow_index + 2)..];
 
+        // Convert the instance name to pascal case so that it can be matched with the GateType variants
         const instance_name = utils.strip(instance_section);
         const instance_name_pascal = try utils.pascal(instance_name, alloc);
         defer alloc.free(instance_name_pascal);
 
+        // Create iterators over the input and output lists
         var input_names = std.mem.tokenizeAny(u8, inputs_section, " ");
         var output_names = std.mem.tokenizeAny(u8, outputs_section, " ");
 
+        // Parse the instance_name_pascal string into a GateType enum variant
         const gate_type: GateType = loop: inline for(@typeInfo(GateType).Enum.fields) |field| {
             if(std.mem.eql(u8, field.name, instance_name_pascal)) {
                 break :loop @enumFromInt(field.value);
@@ -306,6 +311,7 @@ pub const Simulator = struct {
             return errors.ParserError.InvalidGateInstanceName;
         };
 
+        // Allocate the input Nodes array and fill it with Nodes, creating new ones if a given name didn't exist in the list
         var inputs_array = std.ArrayList(*Node).init(alloc);
         while(input_names.next()) |input_name| {
             const stripped_input_name = utils.strip(input_name);
@@ -320,6 +326,7 @@ pub const Simulator = struct {
             }
         }
 
+        // Create the new Gate object and pass the input Nodes array to it
         const gate = new_gate: {
             if(gate_type == .Input) {
                 try self.input_states.append(false);
@@ -331,10 +338,12 @@ pub const Simulator = struct {
             }
         };
 
+        // Add the new Gate to the list of all Gate instances
         try self.gates.append(gate);
         const gates_len = self.gates.items.len;
         const last_gate_ptr = &self.gates.items[gates_len - 1];
 
+        // Assign the Gate as the driver of the Nodes that are listed as its outputs
         while(output_names.next()) |output_name| {
             const stripped_output_name = utils.strip(output_name);
             if(!self.nodes.contains(stripped_output_name)) {
