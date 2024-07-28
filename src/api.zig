@@ -21,6 +21,7 @@ pub const WireFunction = enum {
 
 pub const NodeIndex = usize;
 pub const GateIndex = usize;
+pub const PortIndex = usize;
 
 /// The logical circuit node (wire).
 ///
@@ -47,13 +48,13 @@ pub const Node = struct {
     }
 
     /// Update the state of the Node, based on the drivers' states and the selected wire function
-    pub fn update(self: *Node, wire_function: WireFunction, gates: *std.ArrayList(Gate), nodes: *std.StringArrayHashMap(Node)) errors.SimulationError!void {
+    pub fn update(self: *Node, wire_function: WireFunction, gates: *std.ArrayList(Gate), nodes: *std.StringArrayHashMap(Node), ports: *std.ArrayList(bool)) errors.SimulationError!void {
         self.state = switch (wire_function) {
             // Look for any driver that outputs 0 and set the state to 0 if any were found
             // If no driver outputs 0 (all output 1), set the state to 1
             .WireAnd => for (self.drivers.items) |driver_index| {
                 const gate = gates.items[driver_index];
-                if ((try gate.output(nodes)) == false) break false;
+                if ((try gate.output(nodes, ports)) == false) break false;
             } else no_zeros: {
                 break :no_zeros true;
             },
@@ -62,13 +63,13 @@ pub const Node = struct {
             // If no driver outputs 1 (all output 0), set the state to 0
             .WireOr => for (self.drivers.items) |driver_index| {
                 const gate = gates.items[driver_index];
-                if ((try gate.output(nodes)) == true) break true;
+                if ((try gate.output(nodes, ports)) == true) break true;
             } else no_zeros: {
                 break :no_zeros false;
             },
 
             // If only one driver is allowed, return an error in case more drivers are attached
-            .WireUniqueDriver => if (self.drivers.items.len == 1) (try gates.items[0].output(nodes)) else return errors.SimulationError.TooManyNodeDrivers
+            .WireUniqueDriver => if (self.drivers.items.len == 1) (try gates.items[0].output(nodes, ports)) else return errors.SimulationError.TooManyNodeDrivers
         };
     }
 };
@@ -110,10 +111,10 @@ pub const Gate = union(GateType) {
     Buf: std.ArrayList(NodeIndex),
 
     // Input device, which also holds a reference to an externally controlled bool that indicates whether it's enabled
-    Input: *bool,
+    Input: PortIndex,
 
     /// Initializes the Gate object. Accepts an externally allocated list of pointers to Node, takes responsibility for deallocating. Must be deinitialized using .deinit()
-    pub fn init(gate_type: GateType, input_nodes: std.ArrayList(NodeIndex), external_state: ?*bool) errors.GateInitError!Self {
+    pub fn init(gate_type: GateType, input_nodes: std.ArrayList(NodeIndex), external_state: ?PortIndex) errors.GateInitError!Self {
         // Check if the number of inputs is correct for the given gate type
         const input_nodes_count = input_nodes.items.len;
         const input_nodes_count_valid = switch (gate_type) {
@@ -173,7 +174,7 @@ pub const Gate = union(GateType) {
     }
 
     /// Returns the gate's output based on the input Nodes' states and the Gate's logic function
-    pub fn output(self: Self, nodes: *std.StringArrayHashMap(Node)) errors.SimulationError!bool {
+    pub fn output(self: Self, nodes: *std.StringArrayHashMap(Node), ports: *std.ArrayList(bool)) errors.SimulationError!bool {
         switch (self) {
             // Two-input gates
             .And => |inputs| {
@@ -236,8 +237,9 @@ pub const Gate = union(GateType) {
             },
 
             // Input device
-            .Input => |external_state| {
-                return external_state.*;
+            .Input => |port_index| {
+                const port_state = ports.items[port_index];
+                return port_state;
             },
         }
     }
@@ -272,11 +274,11 @@ pub const Simulator = struct {
     /// List of Gates in the circuit. Owns the memory that stores the Gates.
     gates: std.ArrayList(Gate),
     /// List of input states used to influence the Inputs in the circuit
-    input_states: std.ArrayList(bool),
+    ports: std.ArrayList(bool),
 
     /// Initializes the Simulator object. Allocates memory for the Nodes' and Gates' lists and builds the internal netlist based on the provided text representation
     pub fn init(text_netlist: [*:0]const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!Self {
-        var simulator: Self = .{ .circuit_name = &.{}, .nodes = std.StringArrayHashMap(Node).init(alloc), .gates = std.ArrayList(Gate).init(alloc), .input_states = std.ArrayList(bool).init(alloc) };
+        var simulator: Self = .{ .circuit_name = &.{}, .nodes = std.StringArrayHashMap(Node).init(alloc), .gates = std.ArrayList(Gate).init(alloc), .ports = std.ArrayList(bool).init(alloc) };
 
         try simulator.parseNetlist(text_netlist, alloc);
 
@@ -294,7 +296,7 @@ pub const Simulator = struct {
             gate.deinit();
         }
         self.gates.deinit();
-        self.input_states.deinit();
+        self.ports.deinit();
     }
 
     fn handleLine(self: *Self, line: []const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
@@ -343,10 +345,10 @@ pub const Simulator = struct {
         // Create the new Gate object and pass the input Nodes array to it
         const gate = new_gate: {
             if (gate_type == .Input) {
-                try self.input_states.append(false);
-                const input_states_len = self.input_states.items.len;
-                const last_input_state_ptr = &self.input_states.items[input_states_len - 1];
-                break :new_gate try Gate.init(gate_type, inputs_array, last_input_state_ptr);
+                try self.ports.append(false);
+                const ports_len = self.ports.items.len;
+                const last_port_index = ports_len - 1;
+                break :new_gate try Gate.init(gate_type, inputs_array, last_port_index);
             } else {
                 break :new_gate try Gate.init(gate_type, inputs_array, null);
             }
@@ -401,7 +403,7 @@ pub const Simulator = struct {
     /// Calculates the new states of all Nodes, advancing the simulation by one step
     pub fn tick(self: *Self) errors.SimulationError!void {
         for (self.nodes.keys()) |key| {
-            try self.nodes.getPtr(key).?.*.update(.WireOr, &self.gates, &self.nodes);
+            try self.nodes.getPtr(key).?.*.update(.WireOr, &self.gates, &self.nodes, &self.ports);
         }
     }
 

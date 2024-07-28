@@ -49,9 +49,9 @@ test "adder" {
         var simulator = try api.Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
 
-        simulator.input_states.items[0] = input_scenario[0];
-        simulator.input_states.items[1] = input_scenario[1];
-        simulator.input_states.items[2] = input_scenario[2];
+        simulator.ports.items[0] = input_scenario[0];
+        simulator.ports.items[1] = input_scenario[1];
+        simulator.ports.items[2] = input_scenario[2];
 
         try simulator.tick();
         //try simulator.tick();
@@ -61,7 +61,7 @@ test "adder" {
         try expect(simulator.nodes.get("out_carry").?.state == outputs[i][0]);
         try expect(simulator.nodes.get("out_sum").?.state == outputs[i][1]);
 
-        std.debug.print("Inputs: <{d} {d} {d}>\nCarry out: {d} Sum: {d}\n\n", .{ @intFromBool(simulator.input_states.items[0]), @intFromBool(simulator.input_states.items[1]), @intFromBool(simulator.input_states.items[2]), @intFromBool(simulator.nodes.get("out_carry").?.state), @intFromBool(simulator.nodes.get("out_sum").?.state) });
+        std.debug.print("Inputs: <{d} {d} {d}>\nCarry out: {d} Sum: {d}\n\n", .{ @intFromBool(simulator.ports.items[0]), @intFromBool(simulator.ports.items[1]), @intFromBool(simulator.ports.items[2]), @intFromBool(simulator.nodes.get("out_carry").?.state), @intFromBool(simulator.nodes.get("out_sum").?.state) });
     }
 }
 
@@ -126,10 +126,10 @@ test "2-bit multiplier" {
         var simulator = try api.Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
 
-        simulator.input_states.items[0] = input_scenario[0];
-        simulator.input_states.items[1] = input_scenario[1];
-        simulator.input_states.items[2] = input_scenario[2];
-        simulator.input_states.items[3] = input_scenario[3];
+        simulator.ports.items[0] = input_scenario[0];
+        simulator.ports.items[1] = input_scenario[1];
+        simulator.ports.items[2] = input_scenario[2];
+        simulator.ports.items[3] = input_scenario[3];
 
         try simulator.tick();
         //try simulator.tick();
@@ -141,7 +141,7 @@ test "2-bit multiplier" {
         try expect(simulator.nodes.get("out_c1").?.state == outputs[i][2]);
         try expect(simulator.nodes.get("out_c0").?.state == outputs[i][3]);
 
-        std.debug.print("Inputs: <{d} {d} {d} {d}>\nOutput: <{d} {d} {d} {d}>\n\n", .{ @intFromBool(simulator.input_states.items[0]), @intFromBool(simulator.input_states.items[1]), @intFromBool(simulator.input_states.items[2]), @intFromBool(simulator.input_states.items[3]), @intFromBool(simulator.nodes.get("out_c3").?.state), @intFromBool(simulator.nodes.get("out_c2").?.state), @intFromBool(simulator.nodes.get("out_c1").?.state), @intFromBool(simulator.nodes.get("out_c0").?.state) });
+        std.debug.print("Inputs: <{d} {d} {d} {d}>\nOutput: <{d} {d} {d} {d}>\n\n", .{ @intFromBool(simulator.ports.items[0]), @intFromBool(simulator.ports.items[1]), @intFromBool(simulator.ports.items[2]), @intFromBool(simulator.ports.items[3]), @intFromBool(simulator.nodes.get("out_c3").?.state), @intFromBool(simulator.nodes.get("out_c2").?.state), @intFromBool(simulator.nodes.get("out_c1").?.state), @intFromBool(simulator.nodes.get("out_c0").?.state) });
     }
 }
 
@@ -201,15 +201,15 @@ test "4-bit carry lookahead binary adder" {
         var simulator = try api.Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
 
-        simulator.input_states.items[0] = input_scenarios[i][0];
-        simulator.input_states.items[1] = input_scenarios[i][1];
-        simulator.input_states.items[2] = input_scenarios[i][2];
-        simulator.input_states.items[3] = input_scenarios[i][3];
-        simulator.input_states.items[4] = input_scenarios[i][4];
-        simulator.input_states.items[5] = input_scenarios[i][5];
-        simulator.input_states.items[6] = input_scenarios[i][6];
-        simulator.input_states.items[7] = input_scenarios[i][7];
-        simulator.input_states.items[8] = input_scenarios[i][8];
+        simulator.ports.items[0] = input_scenarios[i][0];
+        simulator.ports.items[1] = input_scenarios[i][1];
+        simulator.ports.items[2] = input_scenarios[i][2];
+        simulator.ports.items[3] = input_scenarios[i][3];
+        simulator.ports.items[4] = input_scenarios[i][4];
+        simulator.ports.items[5] = input_scenarios[i][5];
+        simulator.ports.items[6] = input_scenarios[i][6];
+        simulator.ports.items[7] = input_scenarios[i][7];
+        simulator.ports.items[8] = input_scenarios[i][8];
 
         try simulator.tick();
         try simulator.tick();
