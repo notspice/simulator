@@ -13,5 +13,6 @@ pub const ParserError = error {
 
 pub const SimulationError = error {
     TooManyNodeDrivers,
-    InvalidGateConnection
+    InvalidGateConnection,
+    NodeNotFound
 };

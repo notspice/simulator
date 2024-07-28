@@ -39,7 +39,7 @@ pub const Node = struct {
     }
 
     /// Free the memory allocated within the Node
-    pub fn deinit(self: *Node) void {
+    pub fn deinit(self: *const Node) void {
         self.drivers.deinit();
     }
 
@@ -257,7 +257,9 @@ pub const Simulator = struct {
     /// Circuit name obtained from the first line of the netlist file
     circuit_name: []const u8,
     /// List of Nodes in the circuit. Owns the memory that stores the Nodes.
-    nodes: std.StringArrayHashMap(Node),
+    nodes: std.ArrayList(Node),
+    /// Mappings of Node names to Node instanecs
+    node_names: std.StringArrayHashMap(*Node),
     /// List of Gates in the circuit. Owns the memory that stores the Gates.
     gates: std.ArrayList(Gate),
     /// List of input states used to influence the Inputs in the circuit
@@ -265,7 +267,13 @@ pub const Simulator = struct {
 
     /// Initializes the Simulator object. Allocates memory for the Nodes' and Gates' lists and builds the internal netlist based on the provided text representation
     pub fn init(text_netlist: [*:0]const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!Self {
-        var simulator: Self = .{ .circuit_name = &.{}, .nodes = std.StringArrayHashMap(Node).init(alloc), .gates = std.ArrayList(Gate).init(alloc), .input_states = std.ArrayList(bool).init(alloc) };
+        var simulator: Self = .{ 
+            .circuit_name = &.{},
+            .nodes = std.ArrayList(Node).init(alloc),
+            .node_names = std.StringArrayHashMap(*Node).init(alloc), 
+            .gates = std.ArrayList(Gate).init(alloc), 
+            .input_states = std.ArrayList(bool).init(alloc) 
+        };
 
         try simulator.parseNetlist(text_netlist, alloc);
 
@@ -274,10 +282,12 @@ pub const Simulator = struct {
 
     /// Deinitializes the Simulator, freeing its memory
     pub fn deinit(self: *Simulator) void {
-        for (self.nodes.keys()) |key| {
-            self.nodes.getPtr(key).?.*.deinit();
+        for (self.nodes.items) |node| {
+            node.deinit();
         }
         self.nodes.deinit();
+
+        self.node_names.deinit();
 
         for (self.gates.items) |gate| {
             gate.deinit();
@@ -318,11 +328,16 @@ pub const Simulator = struct {
         var inputs_array = std.ArrayList(*Node).init(alloc);
         while (input_names.next()) |input_name| {
             const stripped_input_name = utils.strip(input_name);
-            if (!self.nodes.contains(stripped_input_name)) {
-                try self.nodes.put(stripped_input_name, Node.init(alloc));
+            if (!self.node_names.contains(stripped_input_name)) {
+                const new_node = Node.init(alloc);
+                try self.nodes.append(new_node);
+                const new_node_index = self.nodes.items.len - 1;
+                const new_node_ptr = &(self.nodes.items[new_node_index]);
+                try self.node_names.put(stripped_input_name, new_node_ptr);
+                std.debug.print("Created node {s}\n", .{stripped_input_name});
             }
 
-            if (self.nodes.getPtr(stripped_input_name)) |node_ptr| {
+            if (self.node_names.get(stripped_input_name)) |node_ptr| {
                 try inputs_array.append(node_ptr);
             } else {
                 return errors.ParserError.NodeNotFound;
@@ -349,11 +364,16 @@ pub const Simulator = struct {
         // Assign the Gate as the driver of the Nodes that are listed as its outputs
         while (output_names.next()) |output_name| {
             const stripped_output_name = utils.strip(output_name);
-            if (!self.nodes.contains(stripped_output_name)) {
-                try self.nodes.put(stripped_output_name, Node.init(alloc));
+            if (!self.node_names.contains(stripped_output_name)) {
+                const new_node = Node.init(alloc);
+                try self.nodes.append(new_node);
+                const new_node_index = self.nodes.items.len - 1;
+                const new_node_ptr = &(self.nodes.items[new_node_index]);
+                try self.node_names.put(stripped_output_name, new_node_ptr);
+                std.debug.print("Created node {s}\n", .{stripped_output_name});
             }
 
-            if (self.nodes.getPtr(stripped_output_name)) |node_ptr| {
+            if (self.node_names.get(stripped_output_name)) |node_ptr| {
                 try node_ptr.*.add_driver(last_gate_ptr);
             } else {
                 return errors.ParserError.NodeNotFound;
@@ -389,8 +409,10 @@ pub const Simulator = struct {
 
     /// Calculates the new states of all Nodes, advancing the simulation by one step
     pub fn tick(self: *Self) errors.SimulationError!void {
-        for (self.nodes.keys()) |key| {
-            try self.nodes.getPtr(key).?.*.update(.WireOr);
+        for (self.node_names.keys()) |key| {
+            std.debug.print("Updating Node {s}\n", .{key});
+            const node_ptr = self.node_names.get(key) orelse return errors.SimulationError.NodeNotFound;
+            try node_ptr.*.update(.WireOr);
         }
     }
 

@@ -48,7 +48,7 @@ test "adder" {
         try simulator.tick();
         try simulator.tick();
 
-        std.debug.print("Inputs: <{d} {d} {d}>\nCarry out: {d} Sum: {d}\n\n", .{ @intFromBool(simulator.input_states.items[0]), @intFromBool(simulator.input_states.items[1]), @intFromBool(simulator.input_states.items[2]), @intFromBool(simulator.nodes.get("out_carry").?.state), @intFromBool(simulator.nodes.get("out_sum").?.state) });
+        std.debug.print("Inputs: <{d} {d} {d}>\nCarry out: {d} Sum: {d}\n\n", .{ @intFromBool(simulator.input_states.items[0]), @intFromBool(simulator.input_states.items[1]), @intFromBool(simulator.input_states.items[2]), @intFromBool(simulator.node_names.get("out_carry").?.*.state), @intFromBool(simulator.node_names.get("out_sum").?.*.state) });
     }
 }
 
@@ -104,6 +104,6 @@ test "2-bit multiplier" {
         try simulator.tick();
         try simulator.tick();
 
-        std.debug.print("Inputs: <{d} {d} {d} {d}>\nOutput: <{d} {d} {d} {d}>\n\n", .{ @intFromBool(simulator.input_states.items[0]), @intFromBool(simulator.input_states.items[1]), @intFromBool(simulator.input_states.items[2]), @intFromBool(simulator.input_states.items[3]), @intFromBool(simulator.nodes.get("out_c0").?.state), @intFromBool(simulator.nodes.get("out_c1").?.state), @intFromBool(simulator.nodes.get("out_c2").?.state), @intFromBool(simulator.nodes.get("out_c3").?.state) });
+        std.debug.print("Inputs: <{d} {d} {d} {d}>\nOutput: <{d} {d} {d} {d}>\n\n", .{ @intFromBool(simulator.input_states.items[0]), @intFromBool(simulator.input_states.items[1]), @intFromBool(simulator.input_states.items[2]), @intFromBool(simulator.input_states.items[3]), @intFromBool(simulator.node_names.get("out_c0").?.*.state), @intFromBool(simulator.node_names.get("out_c1").?.*.state), @intFromBool(simulator.node_names.get("out_c2").?.*.state), @intFromBool(simulator.node_names.get("out_c3").?.*.state) });
     }
 }
