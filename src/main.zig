@@ -166,16 +166,16 @@ test "4-bit carry lookahead binary adder" {
         \\XOR   : in_a3 in_b3                       -> xor_3
         \\AND   : in_a3 in_b3                       -> and_3
         \\XOR   : xor_0 in_carry                    -> xor_4
-        \\XOR   : or_1 xor_1                        -> xor_5
-        \\XOR   : or_2 xor_2                        -> xor 6
-        \\XOR   : or_3 xor_3                        -> xor_7
+        \\XOR   : or_0 xor_1                        -> xor_5
+        \\XOR   : or_1 xor_2                        -> xor_6
+        \\XOR   : or_2 xor_3                        -> xor_7
         \\OR    : and_0 and_4                       -> or_0
         \\OR    : and_1 and_5 and_6                 -> or_1
         \\OR    : and_2 and_7 and_8 and_9           -> or_2
         \\OR    : and_3 and_10 and_11 and_12 and_13 -> or_3
-        \\AND   : in_carry and_0                    -> and_4
+        \\AND   : in_carry xor_0                    -> and_4
         \\AND   : and_0 xor_1                       -> and_5
-        \\AND   : xor_1 xor_0 in_carry              -> and_6
+        \\AND   : xor_0 xor_1 in_carry              -> and_6
         \\AND   : xor_2 and_1                       -> and_7
         \\AND   : xor_2 xor_1 and_0                 -> and_8
         \\AND   : xor_2 xor_1 xor_0 in_carry        -> and_9
@@ -187,6 +187,8 @@ test "4-bit carry lookahead binary adder" {
 
     var input_scenarios: [512][9] bool = undefined;
     var outputs: [512][5] bool = undefined;
+
+    testutils.testTitle("4-bit CLABA test");
 
     for (0..512) |i| {
         const a = i >> 5;
@@ -213,15 +215,9 @@ test "4-bit carry lookahead binary adder" {
 
         try simulator.tick();
         try simulator.tick();
-        try simulator.tick();
-        try simulator.tick();
-
-        try expect(simulator.nodes.get("xor_7").?.state == outputs[i][0]);
-        try expect(simulator.nodes.get("xor_6").?.state == outputs[i][1]);
-        try expect(simulator.nodes.get("xor_5").?.state == outputs[i][2]);
-        try expect(simulator.nodes.get("xor_4").?.state == outputs[i][3]);
-        try expect(simulator.nodes.get("or_3").?.state == outputs[i][4]);
-
+        //try simulator.tick();
+        //try simulator.tick();
+        
         // std.debug.print("a: {d} b: {d} carry: {d} sum: {d}\n", .{ a, b, carry, sum });
         // std.debug.print("{d} {d} {d} {d} {d} {d} {d} {d} {d} - {d} {d} {d} {d} {d}\n", .{
         //     @intFromBool(input_scenarios[i][0]),
@@ -239,6 +235,19 @@ test "4-bit carry lookahead binary adder" {
         //     @intFromBool(outputs[i][3]),
         //     @intFromBool(outputs[i][4])
         //     });
+        // std.debug.print("                  - {d} {d} {d} {d} {d}\n", .{
+        //     @intFromBool(simulator.nodes.get("xor_7").?.state),
+        //     @intFromBool(simulator.nodes.get("xor_6").?.state),
+        //     @intFromBool(simulator.nodes.get("xor_5").?.state),
+        //     @intFromBool(simulator.nodes.get("xor_4").?.state),
+        //     @intFromBool(simulator.nodes.get("or_3").?.state)
+        // });
+        // std.debug.print("{d} - {d}\n", .{ @intFromBool(simulator.nodes.get("or_1").?.state), @intFromBool(simulator.nodes.get("and_6").?.state)});
+        try expect(simulator.nodes.get("xor_7").?.state == outputs[i][0]);
+        try expect(simulator.nodes.get("xor_6").?.state == outputs[i][1]);
+        try expect(simulator.nodes.get("xor_5").?.state == outputs[i][2]);
+        try expect(simulator.nodes.get("xor_4").?.state == outputs[i][3]);
+        try expect(simulator.nodes.get("or_3").?.state == outputs[i][4]);
     }
 
 }
