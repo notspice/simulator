@@ -1,8 +1,7 @@
 const std = @import("std");
-
 const api = @import("api.zig");
-
 const testutils = @import("testutils.zig");
+const expect = std.testing.expect;
 
 pub fn main() !void {
     // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -33,9 +32,20 @@ test "adder" {
         .{ true, true, true },
     };
 
+    const outputs = [8][2]bool {
+        .{ false, false },
+        .{ false, true },
+        .{ false, true },
+        .{ true, false },
+        .{ false, true },
+        .{ true, false },
+        .{ true, false },
+        .{ true, true },
+    };
+
     testutils.testTitle("Full adder test");
 
-    for (input_scenarios) |input_scenario| {
+    for (0.., input_scenarios) |i, input_scenario| {
         var simulator = try api.Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
 
@@ -48,6 +58,9 @@ test "adder" {
         try simulator.tick();
         try simulator.tick();
 
+        try expect(simulator.nodes.get("out_carry").?.state == outputs[i][0]);
+        try expect(simulator.nodes.get("out_sum").?.state == outputs[i][1]);
+
         std.debug.print("Inputs: <{d} {d} {d}>\nCarry out: {d} Sum: {d}\n\n", .{ @intFromBool(simulator.input_states.items[0]), @intFromBool(simulator.input_states.items[1]), @intFromBool(simulator.input_states.items[2]), @intFromBool(simulator.nodes.get("out_carry").?.state), @intFromBool(simulator.nodes.get("out_sum").?.state) });
     }
 }
@@ -55,18 +68,18 @@ test "adder" {
 test "2-bit multiplier" {
     const text_netlist: [*:0]const u8 =
         \\2-bit multiplier
-        \\INPUT :                     -> in_a0
-        \\INPUT :                     -> in_a1 
-        \\INPUT :                     -> in_b0
+        \\INPUT :                     -> in_a1
+        \\INPUT :                     -> in_a0 
         \\INPUT :                     -> in_b1
-        \\AND   : in_a0     in_b0     -> carry_1st
-        \\AND   : in_a0     in_b1     -> out_c0
-        \\AND   : in_a1     in_b0     -> carry_2nd
-        \\AND   : in_a1     in_b1     -> carry_3rd
-        \\XOR   : carry_1st carry_2nd -> out_c1
-        \\AND   : carry_1st carry_2nd -> carry_4th
-        \\XOR   : carry_3rd carry_4th -> out_c2
-        \\AND   : carry_3rd carry_4th -> out_c3
+        \\INPUT :                     -> in_b0
+        \\AND   : in_a0     in_b1     -> and_1
+        \\AND   : in_a0     in_b0     -> out_c0
+        \\AND   : in_a1     in_b0     -> and_2
+        \\AND   : in_a1     in_b1     -> and_3
+        \\XOR   : and_1     and_2     -> out_c1
+        \\AND   : and_1     and_2     -> and_4
+        \\XOR   : and_3     and_4     -> out_c2
+        \\AND   : and_3     and_4     -> out_c3
     ;
 
     const input_scenarios = [16][4]bool{
@@ -88,9 +101,28 @@ test "2-bit multiplier" {
         .{ true, true, true, true },
     };
 
+    const outputs: [16][4]bool = [16][4]bool {
+        .{ false, false, false, false },
+        .{ false, false, false, false },
+        .{ false, false, false, false },
+        .{ false, false, false, false },
+        .{ false, false, false, false },
+        .{ false, false, false, true },
+        .{ false, false, true, false },
+        .{ false, false, true, true },
+        .{ false, false, false, false },
+        .{ false, false, true, false },
+        .{ false, true, false, false },
+        .{ false, true, true, false },
+        .{ false, false, false, false },
+        .{ false, false, true, true },
+        .{ false, true, true, false },
+        .{ true, false, false, true }
+    };
+
     testutils.testTitle("Multiplier test");
 
-    for (input_scenarios) |input_scenario| {
+    for (0.., input_scenarios) |i, input_scenario| {
         var simulator = try api.Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
 
@@ -104,6 +136,11 @@ test "2-bit multiplier" {
         try simulator.tick();
         try simulator.tick();
 
-        std.debug.print("Inputs: <{d} {d} {d} {d}>\nOutput: <{d} {d} {d} {d}>\n\n", .{ @intFromBool(simulator.input_states.items[0]), @intFromBool(simulator.input_states.items[1]), @intFromBool(simulator.input_states.items[2]), @intFromBool(simulator.input_states.items[3]), @intFromBool(simulator.nodes.get("out_c0").?.state), @intFromBool(simulator.nodes.get("out_c1").?.state), @intFromBool(simulator.nodes.get("out_c2").?.state), @intFromBool(simulator.nodes.get("out_c3").?.state) });
+        try expect(simulator.nodes.get("out_c3").?.state == outputs[i][0]);
+        try expect(simulator.nodes.get("out_c2").?.state == outputs[i][1]);
+        try expect(simulator.nodes.get("out_c1").?.state == outputs[i][2]);
+        try expect(simulator.nodes.get("out_c0").?.state == outputs[i][3]);
+
+        std.debug.print("Inputs: <{d} {d} {d} {d}>\nOutput: <{d} {d} {d} {d}>\n\n", .{ @intFromBool(simulator.input_states.items[0]), @intFromBool(simulator.input_states.items[1]), @intFromBool(simulator.input_states.items[2]), @intFromBool(simulator.input_states.items[3]), @intFromBool(simulator.nodes.get("out_c3").?.state), @intFromBool(simulator.nodes.get("out_c2").?.state), @intFromBool(simulator.nodes.get("out_c1").?.state), @intFromBool(simulator.nodes.get("out_c0").?.state) });
     }
 }
