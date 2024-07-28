@@ -301,6 +301,8 @@ pub const Simulator = struct {
         const colon_index = std.mem.indexOf(u8, line, ":") orelse return errors.ParserError.ColonNotFound;
         const arrow_index = std.mem.indexOf(u8, line, "->") orelse return errors.ParserError.ArrowNotFound;
 
+        if(self.nodes.items.len > 0) std.debug.print("1: {any}\n", .{@intFromEnum(self.nodes.items[0].drivers.items[0].*)});
+
         // Slice the line contents to obtain the three sections
         const instance_section = line[0..colon_index];
         const inputs_section = line[(colon_index + 1)..arrow_index];
@@ -324,6 +326,8 @@ pub const Simulator = struct {
             return errors.ParserError.InvalidGateInstanceName;
         };
 
+        if(self.nodes.items.len > 0) std.debug.print("2: {any}\n", .{@intFromEnum(self.nodes.items[0].drivers.items[0].*)});
+
         // Allocate the input Nodes array and fill it with Nodes, creating new ones if a given name didn't exist in the list
         var inputs_array = std.ArrayList(*Node).init(alloc);
         while (input_names.next()) |input_name| {
@@ -334,7 +338,6 @@ pub const Simulator = struct {
                 const new_node_index = self.nodes.items.len - 1;
                 const new_node_ptr = &(self.nodes.items[new_node_index]);
                 try self.node_names.put(stripped_input_name, new_node_ptr);
-                std.debug.print("Created node {s}\n", .{stripped_input_name});
             }
 
             if (self.node_names.get(stripped_input_name)) |node_ptr| {
@@ -343,6 +346,8 @@ pub const Simulator = struct {
                 return errors.ParserError.NodeNotFound;
             }
         }
+
+        if(self.nodes.items.len > 0) std.debug.print("3: {any}\n", .{@intFromEnum(self.nodes.items[0].drivers.items[0].*)});
 
         // Create the new Gate object and pass the input Nodes array to it
         const gate = new_gate: {
@@ -356,10 +361,15 @@ pub const Simulator = struct {
             }
         };
 
+        if(self.nodes.items.len > 0) std.debug.print("4: {any}\n", .{@intFromEnum(self.nodes.items[0].drivers.items[0].*)});
+
         // Add the new Gate to the list of all Gate instances
         try self.gates.append(gate);
         const gates_len = self.gates.items.len;
-        const last_gate_ptr = &self.gates.items[gates_len - 1];
+        std.debug.print("{d} gates\n", .{self.gates.items.len});
+        const last_gate_ptr = &(self.gates.items[gates_len - 1]);
+
+        if(self.nodes.items.len > 0) std.debug.print("5: {any}\n", .{@intFromEnum(self.nodes.items[0].drivers.items[0].*)});
 
         // Assign the Gate as the driver of the Nodes that are listed as its outputs
         while (output_names.next()) |output_name| {
@@ -370,15 +380,16 @@ pub const Simulator = struct {
                 const new_node_index = self.nodes.items.len - 1;
                 const new_node_ptr = &(self.nodes.items[new_node_index]);
                 try self.node_names.put(stripped_output_name, new_node_ptr);
-                std.debug.print("Created node {s}\n", .{stripped_output_name});
             }
 
             if (self.node_names.get(stripped_output_name)) |node_ptr| {
-                try node_ptr.*.add_driver(last_gate_ptr);
+                try node_ptr.add_driver(last_gate_ptr);
             } else {
                 return errors.ParserError.NodeNotFound;
             }
         }
+
+        if(self.nodes.items.len > 0) std.debug.print("6: {any}\n\n\n", .{@intFromEnum(self.nodes.items[0].drivers.items[0].*)});
     }
 
     /// Takes the text representation of the netlist and transforms it into appropriately connected Nodes and Gates
@@ -410,9 +421,8 @@ pub const Simulator = struct {
     /// Calculates the new states of all Nodes, advancing the simulation by one step
     pub fn tick(self: *Self) errors.SimulationError!void {
         for (self.node_names.keys()) |key| {
-            std.debug.print("Updating Node {s}\n", .{key});
             const node_ptr = self.node_names.get(key) orelse return errors.SimulationError.NodeNotFound;
-            try node_ptr.*.update(.WireOr);
+            try node_ptr.update(.WireOr);
         }
     }
 
