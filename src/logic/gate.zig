@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const NodeIndex = @import("../simulator.zig").NodeIndex;
 const node = @import("node.zig");
 const errors = @import("../utils/errors.zig");
 
@@ -18,9 +19,6 @@ pub const GateType = enum {
     // One-input gates
     Not,
     Buf,
-
-    // Ports
-    Input,
 };
 
 /// Representation of a gate, with its type and input nodes
@@ -28,25 +26,22 @@ pub const Gate = union(GateType) {
     /// Alias for the type of this struct
     const Self = @This();
     /// Alias for the list of inputs
-    const InputList = std.ArrayList(node.NodeIndex);
+    const InputList = std.ArrayList(NodeIndex);
 
     // Two-input gates and their inputs
-    And: std.ArrayList(node.NodeIndex),
-    Or: std.ArrayList(node.NodeIndex),
-    Xor: std.ArrayList(node.NodeIndex),
-    Nand: std.ArrayList(node.NodeIndex),
-    Nor: std.ArrayList(node.NodeIndex),
-    Xnor: std.ArrayList(node.NodeIndex),
+    And: std.ArrayList(NodeIndex),
+    Or: std.ArrayList(NodeIndex),
+    Xor: std.ArrayList(NodeIndex),
+    Nand: std.ArrayList(NodeIndex),
+    Nor: std.ArrayList(NodeIndex),
+    Xnor: std.ArrayList(NodeIndex),
 
     // One-input gates
-    Not: std.ArrayList(node.NodeIndex),
-    Buf: std.ArrayList(node.NodeIndex),
-
-    // Input device, which also holds a reference to an externally controlled bool that indicates whether it's enabled
-    Input: node.PortIndex,
+    Not: std.ArrayList(NodeIndex),
+    Buf: std.ArrayList(NodeIndex),
 
     /// Initializes the Gate object. Accepts an externally allocated list of pointers to Node, takes responsibility for deallocating. Must be deinitialized using .deinit()
-    pub fn init(gate_type: GateType, input_nodes: std.ArrayList(node.NodeIndex), external_state: ?node.PortIndex) errors.GateInitError!Self {
+    pub fn init(gate_type: GateType, input_nodes: std.ArrayList(NodeIndex)) errors.GateInitError!Self {
         // Check if the number of inputs is correct for the given gate type
         const input_nodes_count = input_nodes.items.len;
         const input_nodes_count_valid = switch (gate_type) {
@@ -59,28 +54,11 @@ pub const Gate = union(GateType) {
 
             .Not => input_nodes_count == 1,
             .Buf => input_nodes_count == 1,
-
-            .Input => input_nodes_count == 0,
         };
+
         if (!input_nodes_count_valid) {
             input_nodes.deinit();
             return errors.GateInitError.WrongNumberOfInputs;
-        }
-
-        // Check if the external state reference for Inputs is provided as required
-        // TODO: Remove
-        if (gate_type == .Input and external_state == null) {
-            input_nodes.deinit();
-            return errors.GateInitError.MissingExternalState;
-        } else if (gate_type != .Input and external_state != null) {
-            input_nodes.deinit();
-            return errors.GateInitError.UnnecessaryExternalState;
-        }
-
-        // Immediately deallocate input_nodes if the Gate is an Input
-        // TODO: Remove
-        if (gate_type == .Input) {
-            input_nodes.deinit();
         }
 
         return switch (gate_type) {
@@ -93,8 +71,6 @@ pub const Gate = union(GateType) {
 
             .Not => Self{ .Not = input_nodes },
             .Buf => Self{ .Buf = input_nodes },
-
-            .Input => Self{ .Input = external_state orelse return errors.GateInitError.MissingExternalState },
         };
     }
 
@@ -103,12 +79,11 @@ pub const Gate = union(GateType) {
         switch (self) {
             .And, .Or, .Xor, .Nand, .Nor, .Xnor, .Not, .Buf => |*inputs| inputs.deinit(),
 
-            else => {},
         }
     }
 
     /// Returns the gate's output based on the input Nodes' states and the Gate's logic function
-    pub fn output(self: Self, nodes: *std.StringArrayHashMap(node.Node), ports: *std.ArrayList(bool)) errors.SimulationError!bool {
+    pub fn output(self: Self, nodes: *std.StringArrayHashMap(node.Node)) errors.SimulationError!bool {
         switch (self) {
             // Two-input gates
             .And => |inputs| {
@@ -168,13 +143,6 @@ pub const Gate = union(GateType) {
             .Buf => |_| {
                 const processed_node = nodes.*.values()[0];
                 return processed_node.state;
-            },
-
-            // Input device
-            // TODO: Remove
-            .Input => |port_index| {
-                const port_state = ports.items[port_index];
-                return port_state;
             },
         }
     }

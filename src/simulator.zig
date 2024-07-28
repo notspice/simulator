@@ -8,6 +8,16 @@ const utils = @import("utils/stringutils.zig");
 const expect = std.testing.expect;
 const expectError = std.testing.expectError;
 
+pub const NodeIndex   = usize;
+pub const GateIndex   = usize;
+pub const InputIndex  = usize;
+pub const OutputIndex = usize;
+
+const LineType = enum {
+    Node,
+    Declaration
+};
+
 /// Structure representing the entire state of the Simulator
 pub const Simulator = struct {
     /// Alias for the type of this struct
@@ -19,16 +29,13 @@ pub const Simulator = struct {
     nodes: std.StringArrayHashMap(node.Node),
     /// List of Gates in the circuit. Owns the memory that stores the Gates.
     gates: std.ArrayList(gate.Gate),
-    /// List of input states used to influence the Inputs in the circuit
-    ports: std.ArrayList(bool),
 
     /// Initializes the Simulator object. Allocates memory for the Nodes' and Gates' lists and builds the internal netlist based on the provided text representation
     pub fn init(text_netlist: [*:0]const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!Self {
         var simulator: Self = .{
             .circuit_name = &.{},
             .nodes = std.StringArrayHashMap(node.Node).init(alloc),
-            .gates = std.ArrayList(gate.Gate).init(alloc),
-            .ports = std.ArrayList(bool).init(alloc)
+            .gates = std.ArrayList(gate.Gate).init(alloc)
         };
 
         try simulator.parseNetlist(text_netlist, alloc);
@@ -47,10 +54,20 @@ pub const Simulator = struct {
             processed_gate.deinit();
         }
         self.gates.deinit();
-        self.ports.deinit();
     }
 
     fn handleLine(self: *Self, line: []const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
+        // Determine line type
+        const arrow_count = std.mem.count(u8, line, "->");
+
+        switch (arrow_count) {
+            0 => return handleNode(self, line, alloc),
+            1 => {},
+            else => return errors.ParserError.UnexpectedArrowCount
+        }
+    }
+
+    fn handleNode(self: *Self, line: []const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
         // Find the location of the colon and arrow that separate the instance, input list and output list
         const colon_index = std.mem.indexOf(u8, line, ":") orelse return errors.ParserError.ColonNotFound;
         const arrow_index = std.mem.indexOf(u8, line, "->") orelse return errors.ParserError.ArrowNotFound;
@@ -79,7 +96,7 @@ pub const Simulator = struct {
         };
 
         // Allocate the input Nodes array and fill it with Nodes, creating new ones if a given name didn't exist in the list
-        var inputs_array = std.ArrayList(node.NodeIndex).init(alloc);
+        var gate_inputs_array = std.ArrayList(NodeIndex).init(alloc);
         while (input_names.next()) |input_name| {
             const stripped_input_name = utils.strip(input_name);
             if (!self.nodes.contains(stripped_input_name)) {
@@ -87,23 +104,14 @@ pub const Simulator = struct {
             }
 
             if (self.nodes.getIndex(stripped_input_name)) |node_index| {
-                try inputs_array.append(node_index);
+                try gate_inputs_array.append(node_index);
             } else {
                 return errors.ParserError.NodeNotFound;
             }
         }
 
         // Create the new Gate object and pass the input Nodes array to it
-        const created_gate = new_gate: {
-            if (gate_type == .Input) {
-                try self.ports.append(false);
-                const ports_len = self.ports.items.len;
-                const last_port_index = ports_len - 1;
-                break :new_gate try gate.Gate.init(gate_type, inputs_array, last_port_index);
-            } else {
-                break :new_gate try gate.Gate.init(gate_type, inputs_array, null);
-            }
-        };
+        const created_gate = try gate.Gate.init(gate_type, gate_inputs_array);
 
         // Add the new Gate to the list of all Gate instances
         try self.gates.append(created_gate);
@@ -123,6 +131,10 @@ pub const Simulator = struct {
                 return errors.ParserError.NodeNotFound;
             }
         }
+    }
+
+    fn handleDeclaration(self: *Self, line: []const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
+        
     }
 
     /// Takes the text representation of the netlist and transforms it into appropriately connected Nodes and Gates
@@ -154,7 +166,7 @@ pub const Simulator = struct {
     /// Calculates the new states of all Nodes, advancing the simulation by one step
     pub fn tick(self: *Self) errors.SimulationError!void {
         for (self.nodes.keys()) |key| {
-            try self.nodes.getPtr(key).?.*.update(.WireOr, &self.gates, &self.nodes, &self.ports);
+            try self.nodes.getPtr(key).?.*.update(.WireOr, &self.gates, &self.nodes);
         }
     }
 

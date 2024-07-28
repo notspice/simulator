@@ -92,6 +92,7 @@ test "2-bit multiplier" {
 test "4-bit carry lookahead binary adder" {
     const text_netlist: [*:0]const u8 = 
         \\4-bit carry lookahead binary adder
+        \\
         \\INPUT :                                   -> in_a3
         \\INPUT :                                   -> in_a2
         \\INPUT :                                   -> in_a1

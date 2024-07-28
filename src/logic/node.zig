@@ -2,6 +2,7 @@ const std = @import("std");
 
 const gate = @import("gate.zig");
 const errors = @import("../utils/errors.zig");
+const GateIndex = @import("../simulator.zig").GateIndex;
 
 const expect = std.testing.expect;
 const expectError = std.testing.expectError;
@@ -15,10 +16,6 @@ pub const WireFunction = enum {
     /// Only one gate is allowed to drive this wire
     WireUniqueDriver,
 };
-
-pub const NodeIndex = usize;
-pub const GateIndex = usize;
-pub const PortIndex = usize;
 
 /// The logical circuit node (wire).
 ///
@@ -45,13 +42,13 @@ pub const Node = struct {
     }
 
     /// Update the state of the Node, based on the drivers' states and the selected wire function
-    pub fn update(self: *Node, wire_function: WireFunction, gates: *std.ArrayList(gate.Gate), nodes: *std.StringArrayHashMap(Node), ports: *std.ArrayList(bool)) errors.SimulationError!void {
+    pub fn update(self: *Node, wire_function: WireFunction, gates: *std.ArrayList(gate.Gate), nodes: *std.StringArrayHashMap(Node)) errors.SimulationError!void {
         self.state = switch (wire_function) {
             // Look for any driver that outputs 0 and set the state to 0 if any were found
             // If no driver outputs 0 (all output 1), set the state to 1
             .WireAnd => for (self.drivers.items) |driver_index| {
                 const processed_gate = gates.items[driver_index];
-                if ((try processed_gate.output(nodes, ports)) == false) break false;
+                if ((try processed_gate.output(nodes)) == false) break false;
             } else no_zeros: {
                 break :no_zeros true;
             },
@@ -60,13 +57,13 @@ pub const Node = struct {
             // If no driver outputs 1 (all output 0), set the state to 0
             .WireOr => for (self.drivers.items) |driver_index| {
                 const processed_gate = gates.items[driver_index];
-                if ((try processed_gate.output(nodes, ports)) == true) break true;
+                if ((try processed_gate.output(nodes)) == true) break true;
             } else no_zeros: {
                 break :no_zeros false;
             },
 
             // If only one driver is allowed, return an error in case more drivers are attached
-            .WireUniqueDriver => if (self.drivers.items.len == 1) (try gates.items[0].output(nodes, ports)) else return errors.SimulationError.TooManyNodeDrivers,
+            .WireUniqueDriver => if (self.drivers.items.len == 1) (try gates.items[0].output(nodes)) else return errors.SimulationError.TooManyNodeDrivers,
         };
     }
 };
