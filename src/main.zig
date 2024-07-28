@@ -88,7 +88,7 @@ test "2-bit multiplier" {
         .{ true, true, true, true },
     };
 
-    testutils.testTitle("Full adder test");
+    testutils.testTitle("Multiplier test");
 
     for (input_scenarios) |input_scenario| {
         var simulator = try api.Simulator.init(text_netlist, std.testing.allocator);
