@@ -1,68 +1,12 @@
 const std = @import("std");
-const api = @import("api.zig");
-const testutils = @import("testutils.zig");
+
 const expect = std.testing.expect;
 
+const testutils = @import("utils/testutils.zig");
+const Simulator = @import("simulator.zig").Simulator;
+
 pub fn main() !void {
-    // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    // const alloc = gpa.allocator();
-}
-
-test "adder" {
-    const text_netlist: [*:0]const u8 =
-        \\Full adder
-        \\INPUT :                     -> in_a
-        \\INPUT :                     -> in_b
-        \\INPUT :                     -> in_carry
-        \\AND   : in_a      in_b      -> carry_1st
-        \\XOR   : in_a      in_b      -> half_sum
-        \\AND   : half_sum  in_carry  -> carry_2nd
-        \\XOR   : half_sum  in_carry  -> out_sum
-        \\OR    : carry_1st carry_2nd -> out_carry
-    ;
-
-    const input_scenarios = [8][3]bool{
-        .{ false, false, false },
-        .{ false, false, true },
-        .{ false, true, false },
-        .{ false, true, true },
-        .{ true, false, false },
-        .{ true, false, true },
-        .{ true, true, false },
-        .{ true, true, true },
-    };
-
-    const outputs = [8][2]bool {
-        .{ false, false },
-        .{ false, true },
-        .{ false, true },
-        .{ true, false },
-        .{ false, true },
-        .{ true, false },
-        .{ true, false },
-        .{ true, true },
-    };
-
-    testutils.testTitle("Full adder test");
-
-    for (0.., input_scenarios) |i, input_scenario| {
-        var simulator = try api.Simulator.init(text_netlist, std.testing.allocator);
-        defer simulator.deinit();
-
-        simulator.ports.items[0] = input_scenario[0];
-        simulator.ports.items[1] = input_scenario[1];
-        simulator.ports.items[2] = input_scenario[2];
-
-        try simulator.tick();
-        //try simulator.tick();
-        //try simulator.tick();
-        //try simulator.tick();
-
-        try expect(simulator.nodes.get("out_carry").?.state == outputs[i][0]);
-        try expect(simulator.nodes.get("out_sum").?.state == outputs[i][1]);
-
-        std.debug.print("Inputs: <{d} {d} {d}>\nCarry out: {d} Sum: {d}\n\n", .{ @intFromBool(simulator.ports.items[0]), @intFromBool(simulator.ports.items[1]), @intFromBool(simulator.ports.items[2]), @intFromBool(simulator.nodes.get("out_carry").?.state), @intFromBool(simulator.nodes.get("out_sum").?.state) });
-    }
+    std.debug.print(":)", .{});
 }
 
 test "2-bit multiplier" {
@@ -123,7 +67,7 @@ test "2-bit multiplier" {
     testutils.testTitle("Multiplier test");
 
     for (0.., input_scenarios) |i, input_scenario| {
-        var simulator = try api.Simulator.init(text_netlist, std.testing.allocator);
+        var simulator = try Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
 
         simulator.ports.items[0] = input_scenario[0];
@@ -200,7 +144,7 @@ test "4-bit carry lookahead binary adder" {
         const sum = a + b + carry;
         outputs[i] = .{ sum & 0x8 == 8, sum & 0x4 == 4, sum & 0x2 == 2, sum & 0x1 == 1, sum > 15 };
 
-        var simulator = try api.Simulator.init(text_netlist, std.testing.allocator);
+        var simulator = try Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
 
         simulator.ports.items[0] = input_scenarios[i][0];
@@ -242,7 +186,7 @@ test "4-bit carry lookahead binary adder" {
         //     @intFromBool(simulator.nodes.get("xor_4").?.state),
         //     @intFromBool(simulator.nodes.get("or_3").?.state)
         // });
-        // std.debug.print("{d} - {d}\n", .{ @intFromBool(simulator.nodes.get("or_1").?.state), @intFromBool(simulator.nodes.get("and_6").?.state)});
+        std.debug.print("{d} - {d}\n", .{ @intFromBool(simulator.nodes.get("or_1").?.state), @intFromBool(simulator.nodes.get("and_6").?.state)});
         try expect(simulator.nodes.get("xor_7").?.state == outputs[i][0]);
         try expect(simulator.nodes.get("xor_6").?.state == outputs[i][1]);
         try expect(simulator.nodes.get("xor_5").?.state == outputs[i][2]);
@@ -250,4 +194,61 @@ test "4-bit carry lookahead binary adder" {
         try expect(simulator.nodes.get("or_3").?.state == outputs[i][4]);
     }
 
+}
+
+test "adder" {
+    const text_netlist: [*:0]const u8 =
+        \\Full adder
+        \\INPUT :                     -> in_a
+        \\INPUT :                     -> in_b
+        \\INPUT :                     -> in_carry
+        \\AND   : in_a      in_b      -> carry_1st
+        \\XOR   : in_a      in_b      -> half_sum
+        \\AND   : half_sum  in_carry  -> carry_2nd
+        \\XOR   : half_sum  in_carry  -> out_sum
+        \\OR    : carry_1st carry_2nd -> out_carry
+    ;
+
+    const input_scenarios = [8][3]bool{
+        .{ false, false, false },
+        .{ false, false, true },
+        .{ false, true, false },
+        .{ false, true, true },
+        .{ true, false, false },
+        .{ true, false, true },
+        .{ true, true, false },
+        .{ true, true, true },
+    };
+
+    const outputs = [8][2]bool {
+        .{ false, false },
+        .{ false, true },
+        .{ false, true },
+        .{ true, false },
+        .{ false, true },
+        .{ true, false },
+        .{ true, false },
+        .{ true, true },
+    };
+
+    testutils.testTitle("Full adder test");
+
+    for (0.., input_scenarios) |i, input_scenario| {
+        var simulator = try Simulator.init(text_netlist, std.testing.allocator);
+        defer simulator.deinit();
+
+        simulator.ports.items[0] = input_scenario[0];
+        simulator.ports.items[1] = input_scenario[1];
+        simulator.ports.items[2] = input_scenario[2];
+
+        try simulator.tick();
+        //try simulator.tick();
+        //try simulator.tick();
+        //try simulator.tick();
+
+        try expect(simulator.nodes.get("out_carry").?.state == outputs[i][0]);
+        try expect(simulator.nodes.get("out_sum").?.state == outputs[i][1]);
+
+        std.debug.print("Inputs: <{d} {d} {d}>\nCarry out: {d} Sum: {d}\n\n", .{ @intFromBool(simulator.ports.items[0]), @intFromBool(simulator.ports.items[1]), @intFromBool(simulator.ports.items[2]), @intFromBool(simulator.nodes.get("out_carry").?.state), @intFromBool(simulator.nodes.get("out_sum").?.state) });
+    }
 }
