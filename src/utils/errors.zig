@@ -7,6 +7,7 @@ pub const GateInitError = error {
 };
 pub const ParserError = error {
     ColonNotFound,
+    ArrowNotFound,
     InvalidGateInstanceName,
     UnexpectedArrowCount
 } || GateInitError;

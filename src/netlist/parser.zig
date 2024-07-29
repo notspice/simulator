@@ -8,18 +8,18 @@ const gate = @import("../logic/gate.zig");
 const node = @import("../logic/node.zig");
 
 
+// pub fn handleLine(simulator: *Simulator, line: []const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
+//     // Determine line type
+//     const arrow_count = std.mem.count(u8, line, "->");
+
+//     switch (arrow_count) {
+//         0 => return handleNode(simulator, line, alloc),
+//         1 => {},
+//         else => return errors.ParserError.UnexpectedArrowCount
+//     }
+// }
+
 pub fn handleLine(simulator: *Simulator, line: []const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
-    // Determine line type
-    const arrow_count = std.mem.count(u8, line, "->");
-
-    switch (arrow_count) {
-        0 => return handleNode(simulator, line, alloc),
-        1 => {},
-        else => return errors.ParserError.UnexpectedArrowCount
-    }
-}
-
-pub fn handleNode(simulator: *Simulator, line: []const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
     // Find the location of the colon and arrow that separate the instance, input list and output list
     const colon_index = std.mem.indexOf(u8, line, ":") orelse return errors.ParserError.ColonNotFound;
     const arrow_index = std.mem.indexOf(u8, line, "->") orelse return errors.ParserError.ArrowNotFound;
@@ -85,9 +85,9 @@ pub fn handleNode(simulator: *Simulator, line: []const u8, alloc: std.mem.Alloca
     }
 }
 
-pub fn handleDeclaration(simulator: *Simulator, line: []const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
+// pub fn handleDeclaration(simulator: *Simulator, line: []const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
     
-}
+// }
 
 /// Takes the text representation of the netlist and transforms it into appropriately connected Nodes and Gates
 pub fn parseNetlist(simulator: *Simulator, text_netlist: [*:0]const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
@@ -103,7 +103,7 @@ pub fn parseNetlist(simulator: *Simulator, text_netlist: [*:0]const u8, alloc: s
         if (line_nr == 0) {
             simulator.circuit_name = line;
         } else {
-            try simulator.handleLine(line, alloc);
+            try handleLine(simulator, line, alloc);
         }
     }
 }
