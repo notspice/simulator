@@ -13,7 +13,7 @@ test "2-bit multiplier" {
     const text_netlist: [*:0]const u8 =
         \\2-bit multiplier
         \\INPUT :                     -> in_a1
-        \\INPUT :                     -> in_a0 
+        \\INPUT :                     -> in_a0
         \\INPUT :                     -> in_b1
         \\INPUT :                     -> in_b0
         \\AND   : in_a0     in_b1     -> and_1
@@ -92,16 +92,8 @@ test "2-bit multiplier" {
 test "4-bit carry lookahead binary adder" {
     const text_netlist: [*:0]const u8 = 
         \\4-bit carry lookahead binary adder
-        \\
-        \\INPUT :                                   -> in_a3
-        \\INPUT :                                   -> in_a2
-        \\INPUT :                                   -> in_a1
-        \\INPUT :                                   -> in_a0
-        \\INPUT :                                   -> in_b3
-        \\INPUT :                                   -> in_b2
-        \\INPUT :                                   -> in_b1
-        \\INPUT :                                   -> in_b0
-        \\INPUT :                                   -> in_carry
+        \\IN    : in_a0 in_a1 in_a2 in_b0 in_b1 in_b2 in_b3 in_carry
+        \\OUT   : xor_7 xor_6 xor_5 xor_4 or_3
         \\XOR   : in_a0 in_b0                       -> xor_0
         \\AND   : in_a0 in_b0                       -> and_0
         \\XOR   : in_a1 in_b1                       -> xor_1
