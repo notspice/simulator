@@ -66,8 +66,18 @@ pub const Simulator = struct {
 
     /// Calculates the new states of all Nodes, advancing the simulation by one step
     pub fn tick(self: *Self) errors.SimulationError!void {
+        // The state calculation is divided into two stages. First, the new state of each node is computed for each node,
+        // but not immediately exposed as the actual state of the node. After all new states are computed, the new states
+        // are passed into the field that holds the actual state of the node. This allows all nodes to be updated in such
+        // a way that the update as a whole happens simultaneously for all nodes, preventing "update order" bugs
+
+        // Compute the new states independently for each node
         for (self.nodes.keys()) |key| {
-            try self.nodes.getPtr(key).?.*.update(.WireOr, &self.gates, &self.nodes);
+            try self.nodes.getPtr(key).?.update(.WireOr, &self.gates, &self.nodes);
+        }
+        // Update the actual states
+        for (self.nodes.keys()) |key| {
+            self.nodes.getPtr(key).?.advance();
         }
     }
 

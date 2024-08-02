@@ -78,7 +78,6 @@ pub const Gate = union(GateType) {
     pub fn deinit(self: Gate) void {
         switch (self) {
             .And, .Or, .Xor, .Nand, .Nor, .Xnor, .Not, .Buf => |*inputs| inputs.deinit(),
-
         }
     }
 
