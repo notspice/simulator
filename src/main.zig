@@ -126,7 +126,7 @@ test "4-bit CLABA test" {
 
     testutils.testTitle("4-bit CLABA test");
 
-    for (0..32) |i| {
+    for (0..48) |i| {
         const a = i >> 5;
         const b = (i >> 1) & 0xF;
         const carry = i & 0x1;
@@ -138,16 +138,6 @@ test "4-bit CLABA test" {
 
         var simulator = try Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
-
-        simulator.nodes.getPtr("in_a0").?.*.new_state = input_scenarios[i][1];
-        simulator.nodes.getPtr("in_a1").?.*.new_state = input_scenarios[i][2];
-        simulator.nodes.getPtr("in_a2").?.*.new_state = input_scenarios[i][3];
-        simulator.nodes.getPtr("in_a3").?.*.new_state = input_scenarios[i][4];
-        simulator.nodes.getPtr("in_b0").?.*.new_state = input_scenarios[i][5];
-        simulator.nodes.getPtr("in_b1").?.*.new_state = input_scenarios[i][6];
-        simulator.nodes.getPtr("in_b2").?.*.new_state = input_scenarios[i][7];
-        simulator.nodes.getPtr("in_b3").?.*.new_state = input_scenarios[i][8];
-        simulator.nodes.getPtr("in_carry").?.*.new_state = input_scenarios[i][0];
 
         std.debug.print("\n\nInput A: ", .{});
         for(input_scenarios[i][0..4]) |input| {
@@ -162,80 +152,43 @@ test "4-bit CLABA test" {
         std.debug.print("\nCarry: {d}", .{@intFromBool(input_scenarios[i][8])});
 
         try simulator.tick();
-        simulator.nodes.getPtr("in_a0").?.*.new_state = input_scenarios[i][1];
-        simulator.nodes.getPtr("in_a1").?.*.new_state = input_scenarios[i][2];
-        simulator.nodes.getPtr("in_a2").?.*.new_state = input_scenarios[i][3];
-        simulator.nodes.getPtr("in_a3").?.*.new_state = input_scenarios[i][4];
-        simulator.nodes.getPtr("in_b0").?.*.new_state = input_scenarios[i][5];
-        simulator.nodes.getPtr("in_b1").?.*.new_state = input_scenarios[i][6];
-        simulator.nodes.getPtr("in_b2").?.*.new_state = input_scenarios[i][7];
-        simulator.nodes.getPtr("in_b3").?.*.new_state = input_scenarios[i][8];
-        simulator.nodes.getPtr("in_carry").?.*.new_state = input_scenarios[i][0];
-        try simulator.tick();
-        simulator.nodes.getPtr("in_a0").?.*.new_state = input_scenarios[i][1];
-        simulator.nodes.getPtr("in_a1").?.*.new_state = input_scenarios[i][2];
-        simulator.nodes.getPtr("in_a2").?.*.new_state = input_scenarios[i][3];
-        simulator.nodes.getPtr("in_a3").?.*.new_state = input_scenarios[i][4];
-        simulator.nodes.getPtr("in_b0").?.*.new_state = input_scenarios[i][5];
-        simulator.nodes.getPtr("in_b1").?.*.new_state = input_scenarios[i][6];
-        simulator.nodes.getPtr("in_b2").?.*.new_state = input_scenarios[i][7];
-        simulator.nodes.getPtr("in_b3").?.*.new_state = input_scenarios[i][8];
-        simulator.nodes.getPtr("in_carry").?.*.new_state = input_scenarios[i][0];
-        try simulator.tick();
-        simulator.nodes.getPtr("in_a0").?.*.new_state = input_scenarios[i][1];
-        simulator.nodes.getPtr("in_a1").?.*.new_state = input_scenarios[i][2];
-        simulator.nodes.getPtr("in_a2").?.*.new_state = input_scenarios[i][3];
-        simulator.nodes.getPtr("in_a3").?.*.new_state = input_scenarios[i][4];
-        simulator.nodes.getPtr("in_b0").?.*.new_state = input_scenarios[i][5];
-        simulator.nodes.getPtr("in_b1").?.*.new_state = input_scenarios[i][6];
-        simulator.nodes.getPtr("in_b2").?.*.new_state = input_scenarios[i][7];
-        simulator.nodes.getPtr("in_b3").?.*.new_state = input_scenarios[i][8];
-        simulator.nodes.getPtr("in_carry").?.*.new_state = input_scenarios[i][0];
-        try simulator.tick();
-        simulator.nodes.getPtr("in_a0").?.*.new_state = input_scenarios[i][1];
-        simulator.nodes.getPtr("in_a1").?.*.new_state = input_scenarios[i][2];
-        simulator.nodes.getPtr("in_a2").?.*.new_state = input_scenarios[i][3];
-        simulator.nodes.getPtr("in_a3").?.*.new_state = input_scenarios[i][4];
-        simulator.nodes.getPtr("in_b0").?.*.new_state = input_scenarios[i][5];
-        simulator.nodes.getPtr("in_b1").?.*.new_state = input_scenarios[i][6];
-        simulator.nodes.getPtr("in_b2").?.*.new_state = input_scenarios[i][7];
-        simulator.nodes.getPtr("in_b3").?.*.new_state = input_scenarios[i][8];
-        simulator.nodes.getPtr("in_carry").?.*.new_state = input_scenarios[i][0];
-        try simulator.tick();
-        simulator.nodes.getPtr("in_a0").?.*.new_state = input_scenarios[i][1];
-        simulator.nodes.getPtr("in_a1").?.*.new_state = input_scenarios[i][2];
-        simulator.nodes.getPtr("in_a2").?.*.new_state = input_scenarios[i][3];
-        simulator.nodes.getPtr("in_a3").?.*.new_state = input_scenarios[i][4];
-        simulator.nodes.getPtr("in_b0").?.*.new_state = input_scenarios[i][5];
-        simulator.nodes.getPtr("in_b1").?.*.new_state = input_scenarios[i][6];
-        simulator.nodes.getPtr("in_b2").?.*.new_state = input_scenarios[i][7];
-        simulator.nodes.getPtr("in_b3").?.*.new_state = input_scenarios[i][8];
-        simulator.nodes.getPtr("in_carry").?.*.new_state = input_scenarios[i][0];
-        try simulator.tick();
+
+        for(0..20) |_| {
+            simulator.nodes.getPtr("in_a0").?.*.new_state = input_scenarios[i][7];
+            simulator.nodes.getPtr("in_a1").?.*.new_state = input_scenarios[i][6];
+            simulator.nodes.getPtr("in_a2").?.*.new_state = input_scenarios[i][5];
+            simulator.nodes.getPtr("in_a3").?.*.new_state = input_scenarios[i][4];
+            simulator.nodes.getPtr("in_b0").?.*.new_state = input_scenarios[i][3];
+            simulator.nodes.getPtr("in_b1").?.*.new_state = input_scenarios[i][2];
+            simulator.nodes.getPtr("in_b2").?.*.new_state = input_scenarios[i][1];
+            simulator.nodes.getPtr("in_b3").?.*.new_state = input_scenarios[i][0];
+            simulator.nodes.getPtr("in_carry").?.*.new_state = input_scenarios[i][8];
+            try simulator.tick();
+        }
 
         std.debug.print("\nOutputs: {d} {d} {d} {d} {d}\n", .{
-            @intFromBool(simulator.nodes.get("or_3").?.state),
             @intFromBool(simulator.nodes.get("xor_4").?.state),
             @intFromBool(simulator.nodes.get("xor_5").?.state),
             @intFromBool(simulator.nodes.get("xor_6").?.state),
             @intFromBool(simulator.nodes.get("xor_7").?.state),
+            @intFromBool(simulator.nodes.get("or_3").?.state),
         });
 
         //testutils.printAllNodeStates(&simulator);
 
          std.debug.print("Expected outputs: {d} {d} {d} {d} {d}", .{
-            @intFromBool(outputs[i][4]),
-            @intFromBool(outputs[i][0]),
-            @intFromBool(outputs[i][1]),
+            @intFromBool(outputs[i][3]),
             @intFromBool(outputs[i][2]),
-            @intFromBool(outputs[i][3])
+            @intFromBool(outputs[i][1]),
+            @intFromBool(outputs[i][0]),
+            @intFromBool(outputs[i][4]),
         });
 
-        // try expect(simulator.nodes.get("xor_7").?.state == outputs[i][0]);
-        // try expect(simulator.nodes.get("xor_6").?.state == outputs[i][1]);
-        // try expect(simulator.nodes.get("xor_5").?.state == outputs[i][2]);
-        // try expect(simulator.nodes.get("xor_4").?.state == outputs[i][3]);
-        // try expect(simulator.nodes.get("or_3").?.state == outputs[i][4]);
+        try expect(simulator.nodes.get("xor_7").?.state == outputs[i][0]);
+        try expect(simulator.nodes.get("xor_6").?.state == outputs[i][1]);
+        try expect(simulator.nodes.get("xor_5").?.state == outputs[i][2]);
+        try expect(simulator.nodes.get("xor_4").?.state == outputs[i][3]);
+        try expect(simulator.nodes.get("or_3").?.state == outputs[i][4]);
     }
 }
 
