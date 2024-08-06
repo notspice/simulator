@@ -4,7 +4,7 @@ const errors = @import("utils/errors.zig");
 const node = @import("logic/node.zig");
 const gate = @import("logic/gate.zig");
 const utils = @import("utils/stringutils.zig");
-const parser = @import("parser/parser.zig");
+const parser = @import("netlist/parser.zig");
 
 const expect = std.testing.expect;
 const expectError = std.testing.expectError;
