@@ -54,6 +54,8 @@ pub fn parseNetlist(_: *Simulator, text_netlist: [*:0]const u8, _: std.mem.Alloc
         }
         if (keyword_instance and inside_instance) inside_instance = false;
     }
+
+    if (inside_module) return errors.ParserError.MissingBracket;
 }
 
 fn categorize(word: []const u8, _: usize) (errors.ParserError)!TokenType {
