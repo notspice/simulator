@@ -29,14 +29,17 @@ pub fn parseNetlist(_: *Simulator, text_netlist: [*:0]const u8, _: std.mem.Alloc
 
     var inside_module: bool = false;
     var inside_instance: bool = false;
+    var keyword_instance: bool = false; // For handling special instances like @IN etc.
     // Iterate over the lines and tokenize all words
     while (lines.next()) |line| : (line_num += 1) {
         var words = std.mem.tokenizeAny(u8, line, " ");
+        keyword_instance = false;
         
         var index: usize = 0;
         while (words.next()) |word| : (index += 1) {
             const token = try categorize(word, line_num);
 
+            if (index == 0 and token == TokenType.Keyword) keyword_instance = true;
             if (token == TokenType.OpenBracket) inside_module = true;
             if (token == TokenType.CloseBracket) inside_module = false;
 
@@ -49,6 +52,7 @@ pub fn parseNetlist(_: *Simulator, text_netlist: [*:0]const u8, _: std.mem.Alloc
                 else return errors.ParserError.UnexpectedCharacter;
             }
         }
+        if (keyword_instance and inside_instance) inside_instance = false;
     }
 }
 
@@ -95,21 +99,21 @@ fn isTokenAllowed(token: TokenType, next_token: TokenType, inside_module: bool, 
         },
         TokenType.Statement => {
             if (inside_module) {
-                if (!inside_instance and next_token == TokenType.Separator) return true;
-                if (inside_instance and (next_token == TokenType.Statement or next_token == TokenType.Separator)) return true;
+                if (!inside_instance and next_token == TokenType.Separator) return true; // Inside a module, but outside any instance, expect a separator (eg. ADD >>:<< in_1 in_2 ...)
+                if (inside_instance and (next_token == TokenType.Statement or next_token == TokenType.Separator)) return true; // Inside a module and an instance, expect another statement or a separator (eg. ADD : in_1 >>in_2<< ...)
             } else {
-                return (next_token == TokenType.Statement or next_token == TokenType.OpenBracket);
+                return (next_token == TokenType.Statement or next_token == TokenType.OpenBracket); // Outside a module and after a statement, expect another statement or an opening bracket (eg. @MODULE test >>{<<)
             }
-            return errors.ParserError.UnexpectedCharacter;
+            return errors.ParserError.UnexpectedCharacter; // Unreachable, in theory...
         },
         TokenType.Separator => {
-            return next_token == TokenType.Statement;
+            return next_token == TokenType.Statement; // Expecting a statement after a separator (eg. ADD : >>in_1<< in_2 ...)
         },
         TokenType.OpenBracket => {
-            return (next_token == TokenType.Statement or next_token == TokenType.Keyword);
+            return (next_token == TokenType.Statement or next_token == TokenType.Keyword); // Expect a statement or a keyword after an opening bracket, just for inlining purposes (eg. @MODULE test { >>@IN<< ...})
         },
         TokenType.CloseBracket => {
-            return next_token == TokenType.Keyword; // Just in case someone defines a module in the same line (eg. } @MODULE anothermodule ...)
+            return next_token == TokenType.Keyword; // Just in case someone defines a module in the same line (eg. } >>@MODULE<< anothermodule ...)
         },
         else => false,
     };
