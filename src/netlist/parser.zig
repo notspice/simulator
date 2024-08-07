@@ -19,9 +19,8 @@ const TokenType = enum {
 };
 
 /// Takes the text representation of the netlist and transforms it into appropriately connected Nodes and Gates
-pub fn parseNetlist(_: *Simulator, text_netlist: [*:0]const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
+pub fn parseNetlist(sim: *Simulator, text_netlist: [*:0]const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
     // Convert 0-terminated string to a Zig slice.
-    std.debug.print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n", .{});
     const text_netlist_length = std.mem.len(text_netlist);
     const text_netlist_slice = text_netlist[0..text_netlist_length];
 
@@ -61,7 +60,6 @@ pub fn parseNetlist(_: *Simulator, text_netlist: [*:0]const u8, alloc: std.mem.A
             if (token == TokenType.CloseBracket) inside_module = false;
 
             if (words.peek()) |next_word| {
-                // std.debug.print("w: {s} nw: {s} t: {s} im: {?} ii: {?}\n", .{ word, next_word, @tagName(token), inside_module, inside_inputs});
                 if (try isTokenAllowed(token, try categorize(next_word, line_num), inside_module, inside_inputs)) {
                     if (!inside_module and token == TokenType.Keyword) { // Module definition
                         // std.debug.print("name: {s}, type: {s}\n", .{ next_word, word[1..word.len] });
@@ -74,8 +72,7 @@ pub fn parseNetlist(_: *Simulator, text_netlist: [*:0]const u8, alloc: std.mem.A
                         defer alloc.free(type_lower);
 
                         var module_type = module.ModuleType.Top;
-                        std.debug.print("{s} {any}\n", .{type_lower, type_lower.len});
-                        
+
                         if (std.mem.eql(u8, type_lower, "top")) {
                             module_type = module.ModuleType.Top;
                         } else if (std.mem.eql(u8, type_lower, "module")) {
@@ -86,7 +83,10 @@ pub fn parseNetlist(_: *Simulator, text_netlist: [*:0]const u8, alloc: std.mem.A
                             return errors.ParserError.UnknownModuleType;
                         }
 
-                        current_module = module.Module.init(alloc, module_type, next_word);
+                        if (current_module) |to_add| {
+                            try sim.add_module(to_add);
+                        }
+                        current_module = try module.Module.init(alloc, module_type, next_word);
                     }
 
                     if (inside_module) {
@@ -112,7 +112,6 @@ pub fn parseNetlist(_: *Simulator, text_netlist: [*:0]const u8, alloc: std.mem.A
 
             const instance_name_pascal = try stringutils.pascal(instance_name, alloc);
             defer alloc.free(instance_name_pascal);
-
 
             // Parse the instance_name_pascal string into a GateType enum variant
             const gate_type: gate.GateType = loop: inline for (@typeInfo(gate.GateType).Enum.fields) |field| {

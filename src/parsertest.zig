@@ -16,5 +16,6 @@ test "parser" {
         \\  AND   : and_3     and_4     -> out_c3 }
     ;
 
-    _ = try Simulator.init(text_netlist, std.testing.allocator);
+    var sim = try Simulator.init(text_netlist, std.testing.allocator);
+    defer sim.deinit();
 }

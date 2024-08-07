@@ -18,13 +18,26 @@ pub const Module = struct {
     nodes: std.StringArrayHashMap(Node),
     gates: std.ArrayList(gate.Gate),
 
-    pub fn init(alloc: std.mem.Allocator, module_type: ModuleType, name: []const u8) Module {
+    pub fn init(alloc: std.mem.Allocator, module_type: ModuleType, name: []const u8) std.mem.Allocator.Error!Module {
         return Module {
             .name = name,
             .module_type = module_type,
             .nodes = std.StringArrayHashMap(Node).init(alloc),
             .gates = std.ArrayList(gate.Gate).init(alloc)
         };
+    }
+
+    pub fn deinit(self: *Module) void {
+        for (self.nodes.values()) |curr_node| {
+            curr_node.deinit();
+        }
+
+        for (self.gates.items) |curr_gate| {
+            curr_gate.deinit();
+        }
+
+        self.nodes.deinit();
+        self.gates.deinit();
     }
 
     pub fn add_node(self: *Module, alloc: std.mem.Allocator, name: []const u8) std.mem.Allocator.Error!void {
@@ -57,6 +70,8 @@ pub const Module = struct {
             }
         }
 
+        inputs.deinit();
+        outputs.deinit();
         // std.debug.print("Adding {s} with inputs {any} and outputs {any}", .{@tagName(gate_type), inputs, outputs});
     }
 
