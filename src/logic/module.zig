@@ -28,11 +28,11 @@ pub const Module = struct {
     }
 
     pub fn deinit(self: *Module) void {
-        for (self.nodes.values()) |curr_node| {
+        for (self.nodes.values()) |*curr_node| {
             curr_node.deinit();
         }
 
-        for (self.gates.items) |curr_gate| {
+        for (self.gates.items) |*curr_gate| {
             curr_gate.deinit();
         }
 
