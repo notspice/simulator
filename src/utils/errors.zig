@@ -11,7 +11,12 @@ pub const ParserError = error {
     UnexpectedArrowCount,
     UnknownKeyword,
     KeywordNotAlphanumeric,
-    UnexpectedCharacter
+    UnexpectedCharacter,
+    UnexpectedBracket,
+    MissingBracket,
+    InvalidModuleType,
+    MisplacedModule,
+    MissingSemicolon,
 } || GateInitError;
 
 pub const SimulationError = error {

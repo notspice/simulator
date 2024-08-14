@@ -6,6 +6,7 @@ const errors = @import("../utils/errors.zig");
 const stringutils = @import("../utils/stringutils.zig");
 const gate = @import("../logic/gate.zig");
 const node = @import("../logic/node.zig");
+const module = @import("../logic/module.zig");
 
 const TokenType = enum {
     Keyword,
@@ -15,10 +16,11 @@ const TokenType = enum {
     CloseBracket,
     OpenSquare,
     CloseSquare,
+    Semicolon,
 };
 
 /// Takes the text representation of the netlist and transforms it into appropriately connected Nodes and Gates
-pub fn parseNetlist(_: *Simulator, text_netlist: [*:0]const u8, _: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
+pub fn parseNetlist(simulator: *Simulator, text_netlist: [*:0]const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
     // Convert 0-terminated string to a Zig slice.
     const text_netlist_length = std.mem.len(text_netlist);
     const text_netlist_slice = text_netlist[0..text_netlist_length];
@@ -27,9 +29,14 @@ pub fn parseNetlist(_: *Simulator, text_netlist: [*:0]const u8, _: std.mem.Alloc
     var lines = std.mem.tokenizeAny(u8, text_netlist_slice, "\n");
     var line_num: usize = 0;
 
-    var inside_module: bool = false;
-    var inside_instance: bool = false;
+    var inside_module:    bool = false; // Interpreting the contents of a module
+    var inside_instance:  bool = false; // Interpreting the second section of the instance
+    var after_inputs:     bool = false; // Interpreting the last section of the instance
     var keyword_instance: bool = false; // For handling special instances like @IN etc.
+
+    // Object being currently initialized
+    var current_module: std.ArrayList([]const u8) = std.ArrayList([]const u8).init(alloc);
+
     // Iterate over the lines and tokenize all words
     while (lines.next()) |line| : (line_num += 1) {
         var words = std.mem.tokenizeAny(u8, line, " ");
@@ -39,23 +46,44 @@ pub fn parseNetlist(_: *Simulator, text_netlist: [*:0]const u8, _: std.mem.Alloc
         while (words.next()) |word| : (index += 1) {
             const token = try categorize(word, line_num);
 
-            if (index == 0 and token == TokenType.Keyword) keyword_instance = true;
+            if (index == 0 and token == TokenType.Keyword) {
+                keyword_instance = true;
+            }
+
+            if (!inside_module and token == TokenType.Keyword) {
+                if (current_module.items.len > 0) try handleModule(simulator, &current_module, alloc);
+                current_module.deinit();
+                current_module = std.ArrayList([]const u8).init(alloc);
+            }
+
             if (token == TokenType.OpenBracket) inside_module = true;
             if (token == TokenType.CloseBracket) inside_module = false;
 
             if (inside_module and !inside_instance and token == TokenType.Separator) inside_instance = true // Enter instance
-            else if (inside_instance and token == TokenType.Separator) inside_instance = false; // Instance end
+            else if (inside_instance and token == TokenType.Separator) {
+                inside_instance = false;
+                after_inputs = true;
+            } // Instance end
 
             if (words.peek()) |next_word| {
-                std.debug.print("w: {s} nw: {s} t: {s} im: {?} ii: {?}\n", .{ word, next_word, @tagName(token), inside_module, inside_instance});
-                if (try isTokenAllowed(token, try categorize(next_word, line_num), inside_module, inside_instance)) continue
-                else return errors.ParserError.UnexpectedCharacter;
+                // std.debug.print("w: {s} nw: {s} t: {s} im: {?} ii: {?}\n", .{ word, next_word, @tagName(token), inside_module, inside_instance});
+                const next_token = try categorize(next_word, line_num);
+                if (try isTokenAllowed(token, next_token, inside_module, inside_instance)) {
+                    if (inside_module and !inside_instance and !std.mem.endsWith(u8, line, ";")) return errors.ParserError.MissingSemicolon
+                    else try current_module.append(word);
+                } else return errors.ParserError.UnexpectedCharacter;
+            } else {
+                if (token == TokenType.CloseBracket or token == TokenType.OpenBracket) {
+                    try current_module.append(word);
+                }
             }
         }
         if (keyword_instance and inside_instance) inside_instance = false;
     }
 
-    if (inside_module) return errors.ParserError.MissingBracket;
+    if (inside_module) return errors.ParserError.MissingBracket; // If the `inside_module` is still true, it has not been set to `false` by the closing bracket detection
+    if (current_module.items.len > 0) try handleModule(simulator, &current_module, alloc);
+    current_module.deinit();
 }
 
 fn categorize(word: []const u8, _: usize) (errors.ParserError)!TokenType {
@@ -85,6 +113,7 @@ fn categorize(word: []const u8, _: usize) (errors.ParserError)!TokenType {
             close_bracket => TokenType.CloseBracket,
             open_suqare => TokenType.OpenSquare,
             close_square => TokenType.CloseSquare,
+            ';' => TokenType.Semicolon,
             else => TokenType.Statement
         };
     }
@@ -101,7 +130,11 @@ fn isTokenAllowed(token: TokenType, next_token: TokenType, inside_module: bool, 
         },
         TokenType.Statement => {
             if (inside_module) {
-                if (!inside_instance and next_token == TokenType.Separator) return true; // Inside a module, but outside any instance, expect a separator (eg. ADD >>:<< in_1 in_2 ...)
+                if (!inside_instance and (
+                    next_token == TokenType.Separator or
+                    next_token == TokenType.CloseBracket or
+                    next_token == TokenType.Semicolon
+                )) return true; // Inside a module, but outside any instance, expect a separator or a closing character (eg. ADD >>:<< in_1 in_2 ...)
                 if (inside_instance and (next_token == TokenType.Statement or next_token == TokenType.Separator)) return true; // Inside a module and an instance, expect another statement or a separator (eg. ADD : in_1 >>in_2<< ...)
             } else {
                 return (next_token == TokenType.Statement or next_token == TokenType.OpenBracket); // Outside a module and after a statement, expect another statement or an opening bracket (eg. @MODULE test >>{<<)
@@ -117,6 +150,52 @@ fn isTokenAllowed(token: TokenType, next_token: TokenType, inside_module: bool, 
         TokenType.CloseBracket => {
             return next_token == TokenType.Keyword; // Just in case someone defines a module in the same line (eg. } >>@MODULE<< anothermodule ...)
         },
+        TokenType.Semicolon => {
+            return (inside_module and !inside_instance and next_token == TokenType.Statement);
+        },
         else => false,
     };
+}
+
+fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8), alloc: std.mem.Allocator) (std.mem.Allocator.Error || errors.ParserError)!void {
+    _ = simulator;
+
+    var inside = false;
+    var finished = false;
+    finished = true;
+    var module_type: ?module.ModuleType = null;
+
+    var type_lower = std.ArrayList(u8).init(alloc);
+    for (module_netlist.items[0]) |char| {
+        try type_lower.append(std.ascii.toLower(char));
+    }
+    defer type_lower.deinit();
+
+    if (std.mem.eql(u8, type_lower.items, "@module")) {
+        module_type = module.ModuleType.Sub;
+    } else if (std.mem.eql(u8, type_lower.items, "@comb")) {
+        module_type = module.ModuleType.SubCombinational;
+    } else if (std.mem.eql(u8, type_lower.items, "@top")) {
+        module_type = module.ModuleType.Top;
+    } else {
+        return errors.ParserError.InvalidModuleType;
+    }
+
+    inside = true;
+
+    _ = module_netlist.orderedRemove(0); // Remove the module type from the netlist
+
+    var name: std.ArrayList(u8) = std.ArrayList(u8).init(alloc); 
+    defer name.deinit();
+    while (!std.mem.eql(u8, module_netlist.items[0], "{")) {
+        try name.appendSlice(module_netlist.orderedRemove(0));
+    }
+
+    _ = module_netlist.orderedRemove(0);
+
+    while (!finished) {
+        if (std.mem.eql(u8, module_netlist.items[0], "{")) finished = true;
+    }
+
+    std.debug.print("{s}\n", .{module_netlist.items});
 }

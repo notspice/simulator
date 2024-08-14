@@ -5,6 +5,7 @@ const node = @import("logic/node.zig");
 const gate = @import("logic/gate.zig");
 const utils = @import("utils/stringutils.zig");
 const parser = @import("netlist/parser.zig");
+const module = @import("logic/module.zig");
 
 const expect = std.testing.expect;
 const expectError = std.testing.expectError;
@@ -26,17 +27,13 @@ pub const Simulator = struct {
 
     /// Circuit name obtained from the first line of the netlist file
     circuit_name: []const u8,
-    /// List of Nodes in the circuit. Owns the memory that stores the Nodes.
-    nodes: std.StringArrayHashMap(node.Node),
-    /// List of Gates in the circuit. Owns the memory that stores the Gates.
-    gates: std.ArrayList(gate.Gate),
+    modules: std.ArrayList(module.Module),
 
     /// Initializes the Simulator object. Allocates memory for the Nodes' and Gates' lists and builds the internal netlist based on the provided text representation
     pub fn init(text_netlist: [*:0]const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!Self {
         var simulator: Self = .{
             .circuit_name = &.{},
-            .nodes = std.StringArrayHashMap(node.Node).init(alloc),
-            .gates = std.ArrayList(gate.Gate).init(alloc)
+            .modules = std.ArrayList(module.Module).init(alloc)
         };
 
         try parser.parseNetlist(&simulator, text_netlist, alloc);
@@ -46,15 +43,10 @@ pub const Simulator = struct {
 
     /// Deinitializes the Simulator, freeing its memory
     pub fn deinit(self: *Simulator) void {
-        for (self.nodes.keys()) |key| {
-            self.nodes.getPtr(key).?.*.deinit();
+        for (self.modules.items) |*item| {
+            item.deinit();
         }
-        self.nodes.deinit();
-
-        for (self.gates.items) |processed_gate| {
-            processed_gate.deinit();
-        }
-        self.gates.deinit();
+        self.modules.deinit();
     }
 
     /// Resets the Nodes to their initial state
@@ -66,8 +58,8 @@ pub const Simulator = struct {
 
     /// Calculates the new states of all Nodes, advancing the simulation by one step
     pub fn tick(self: *Self) errors.SimulationError!void {
-        for (self.nodes.keys()) |key| {
-            try self.nodes.getPtr(key).?.*.update(.WireOr, &self.gates, &self.nodes);
+        for (self.modules.items) |*executed_module| {
+            try executed_module.tick();
         }
     }
 
@@ -77,5 +69,23 @@ pub const Simulator = struct {
         _ = node_index;
 
         // --TODO--
+    }
+
+    /// Probes for the state of a particular node
+    pub fn getNodeStateString(self: Self, node_name: []const u8) bool {
+        for (self.modules.items) |*searched_module| {
+            if (searched_module.containsNode(node_name)) return searched_module.getNodeStatus(node_name);
+        }
+        return false;
+    }
+
+    pub fn setNodeStateString(self: Self, node_name: []const u8, state: bool) void {
+        for (self.modules.items) |*searched_module| {
+            if (searched_module.containsNode(node_name)) return searched_module.setNodeStatus(node_name, state);
+        }
+    }
+
+    pub fn add_module(self: *Self, module_to_add: module.Module) std.mem.Allocator.Error!void {
+        try self.modules.append(module_to_add);
     }
 };
