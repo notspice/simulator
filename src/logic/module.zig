@@ -43,7 +43,6 @@ pub const Module = struct {
 
     pub fn add_node(self: *Module, alloc: std.mem.Allocator, name: std.ArrayList(u8)) std.mem.Allocator.Error!void {
         if (!self.nodes.contains(name.items)) {
-            std.debug.print("{s}", .{name.items});
             try self.nodes.put(name.items, Node.init(alloc));
         }
     }
@@ -56,6 +55,7 @@ pub const Module = struct {
         for (inputs.items) |input| {
             try add_node(self, alloc, input);
             if (self.nodes.getIndex(input.items)) |node_index| {
+                std.debug.print("{d}\n", .{node_index});
                 try gate_inputs.append(node_index);
             } else {
                 return errors.ParserError.NodeNotFound; // Unreachable in theory
@@ -69,12 +69,13 @@ pub const Module = struct {
             try add_node(self, alloc, output);
             if (self.nodes.getPtr(output.items)) |captured_node| {
                 try captured_node.add_driver(self.gates.items.len - 1);
+                std.debug.print("{any}\n", .{captured_node.drivers.items});
             }
         }
 
+        std.debug.print("Adding {s} with inputs {any} and outputs {any}", .{@tagName(gate_type), created_gate, outputs.items});
         inputs.deinit();
         outputs.deinit();
-        // std.debug.print("Adding {s} with inputs {any} and outputs {any}", .{@tagName(gate_type), inputs, outputs});
     }
 
     pub fn tick(self: *Module) errors.SimulationError!void {
@@ -84,7 +85,6 @@ pub const Module = struct {
     }
 
     pub fn containsNode(self: *Module, node_name: []const u8) bool {
-        std.debug.print("{s} {any}\n", .{node_name, self.nodes.keys()});
         return self.nodes.contains(node_name);
     }
 
@@ -93,7 +93,6 @@ pub const Module = struct {
     }
 
     pub fn setNodeStatus(self: *Module, node_name: []const u8, state: bool) void {
-        std.debug.print("aaaaaaa", .{});
         self.nodes.getPtr(node_name).?.state = state;
     }
 };

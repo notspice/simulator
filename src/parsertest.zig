@@ -21,19 +21,6 @@ test "parser" {
         \\AND   : and_1     and_2     -> and_4;
         \\XOR   : and_3     and_4     -> out_c2;
         \\AND   : and_3     and_4     -> out_c3;
-        \\} @MODULE multiplexer2 test aaaa {
-        // \\INPUT :                     -> in_a1
-        // \\INPUT :                     -> in_a0
-        // \\INPUT :                     -> in_b1
-        // \\INPUT :                     -> in_b0
-        \\AND   : in_a0     in_b1     -> and_1;
-        \\AND   : in_a0     in_b0     -> out_c0;
-        \\AND   : in_a1     in_b0     -> and_2;
-        \\AND   : in_a1     in_b1     -> and_3;
-        \\XOR   : and_1     and_2     -> out_c1;
-        \\AND   : and_1     and_2     -> and_4;
-        \\XOR   : and_3     and_4     -> out_c2;
-        \\AND   : and_3     and_4     -> out_c3;
         \\}
     ;
 
@@ -77,7 +64,7 @@ test "parser" {
 
     testutils.testTitle("Multiplier test");
 
-    for (0.., input_scenarios[0..1]) |i, input_scenario| {
+    for (0.., input_scenarios) |i, input_scenario| {
         var simulator = try Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
 

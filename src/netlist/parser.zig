@@ -56,8 +56,9 @@ pub fn parseNetlist(simulator: *Simulator, text_netlist: [*:0]const u8, alloc: s
                 current_module = std.ArrayList([]const u8).init(alloc);
             }
 
-            if (token == TokenType.OpenBracket) inside_module = true;
             if (token == TokenType.CloseBracket) inside_module = false;
+            if (inside_module and !std.mem.endsWith(u8, line, ";")) return errors.ParserError.MissingSemicolon;
+            if (token == TokenType.OpenBracket) inside_module = true;
 
             if (inside_module and !inside_instance and token == TokenType.Separator) inside_instance = true // Enter instance
             else if (inside_instance and token == TokenType.Separator) {
@@ -69,13 +70,10 @@ pub fn parseNetlist(simulator: *Simulator, text_netlist: [*:0]const u8, alloc: s
                 // std.debug.print("w: {s} nw: {s} t: {s} im: {?} ii: {?}\n", .{ word, next_word, @tagName(token), inside_module, inside_instance});
                 const next_token = try categorize(next_word, line_num);
                 if (try isTokenAllowed(token, next_token, inside_module, inside_instance)) {
-                    if (inside_module and !inside_instance and !std.mem.endsWith(u8, line, ";")) return errors.ParserError.MissingSemicolon
-                    else try current_module.append(word);
+                    try current_module.append(word);
                 } else return errors.ParserError.UnexpectedCharacter;
             } else {
-                if (token == TokenType.CloseBracket or token == TokenType.OpenBracket) {
-                    try current_module.append(word);
-                }
+                try current_module.append(word);
             }
         }
         if (keyword_instance and inside_instance) inside_instance = false;
@@ -158,11 +156,8 @@ fn isTokenAllowed(token: TokenType, next_token: TokenType, inside_module: bool, 
 }
 
 fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8), alloc: std.mem.Allocator) (std.mem.Allocator.Error || errors.ParserError)!void {
-    _ = simulator;
-
     var inside = false;
     var finished = false;
-    finished = true;
     var module_type: ?module.ModuleType = null;
 
     var type_lower = std.ArrayList(u8).init(alloc);
@@ -193,9 +188,57 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
 
     _ = module_netlist.orderedRemove(0);
 
+    var created_module: module.Module = try module.Module.init(alloc, module_type.?, name);
+        // std.debug.print("{s}\n", .{module_netlist.items});
+
     while (!finished) {
-        if (std.mem.eql(u8, module_netlist.items[0], "{")) finished = true;
+        if (std.mem.eql(u8, module_netlist.items[0], "}")) {
+            finished = true;
+            break;
+        }
+        // std.debug.print("{s}\n", .{module_netlist.items});
+
+        const name_pascal = try stringutils.pascal(module_netlist.orderedRemove(0), alloc);
+        defer alloc.free(name_pascal);
+
+        const instance_type: gate.GateType = inline for (@typeInfo(gate.GateType).Enum.fields) |g_type| {
+            if (std.mem.eql(u8, name_pascal, g_type.name)) break @enumFromInt(g_type.value);
+        } else return errors.ParserError.InvalidGateType;
+
+        _ = module_netlist.orderedRemove(0); // remove the first separator (eg. AND >>:<< in_1 in_2 -> out_1)
+        // std.debug.print("{s}\n", .{module_netlist.items});
+
+        var inputs: std.ArrayList(std.ArrayList(u8)) = std.ArrayList(std.ArrayList(u8)).init(alloc);
+        while (!std.mem.eql(u8, module_netlist.items[0], "->")) {
+            var input_list = std.ArrayList(u8).init(alloc);
+            for (module_netlist.orderedRemove(0)) |char| {
+                try input_list.append(char);
+            }
+            try inputs.append(input_list);
+        }
+
+        _ = module_netlist.orderedRemove(0); // remove the second separator (->)
+        // std.debug.print("{s}\n", .{module_netlist.items});
+
+        var outputs: std.ArrayList(std.ArrayList(u8)) = std.ArrayList(std.ArrayList(u8)).init(alloc);
+        while (!std.mem.endsWith(u8, module_netlist.items[0], ";")) {
+            var output_list = std.ArrayList(u8).init(alloc);
+            for (module_netlist.orderedRemove(0)) |char| {
+                try output_list.append(char);
+            }
+            try outputs.append(output_list);
+        }
+        var last_output_list = std.ArrayList(u8).init(alloc);
+        for (module_netlist.orderedRemove(0)) |char| {
+            if (char != ';')
+            try last_output_list.append(char);
+        }
+        try outputs.append(last_output_list);
+
+        try created_module.add_gate(alloc, instance_type, inputs, outputs);
     }
+
+    try simulator.add_module(created_module);
 
     std.debug.print("{s}\n", .{module_netlist.items});
 }
