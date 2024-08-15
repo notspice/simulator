@@ -9,7 +9,15 @@ pub const ParserError = error {
     ColonNotFound,
     ArrowNotFound,
     InvalidGateInstanceName,
-    UnexpectedArrowCount
+    UnexpectedArrowCount,
+    UnknownKeyword,
+    KeywordNotAlphanumeric,
+    UnexpectedCharacter,
+    UnexpectedBracket,
+    MissingBracket,
+    InvalidModuleType,
+    MisplacedModule,
+    MissingSemicolon,
 } || GateInitError;
 
 pub const SimulationError = error {

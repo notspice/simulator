@@ -51,7 +51,7 @@ pub const Node = struct {
 
     /// Update the state of the Node, based on the drivers' states and the selected wire function
     pub fn update(self: *Self, wire_function: WireFunction, gates: *std.ArrayList(gate.Gate), nodes: *std.StringArrayHashMap(Node)) errors.SimulationError!void {
-        self.new_state = if(self.drivers.items.len == 0) self.new_state else switch (wire_function) {
+        self.new_state = if(self.drivers.items.len == 0) self.state else switch (wire_function) {
             // Look for any driver that outputs 0 and set the state to 0 if any were found
             // If no driver outputs 0 (all output 1), set the state to 1
             .WireAnd => for (self.drivers.items) |driver_index| {
