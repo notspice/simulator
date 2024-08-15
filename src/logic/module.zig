@@ -86,8 +86,6 @@ pub const Module = struct {
                 try captured_node.add_driver(self.gates.items.len - 1);
             }
         }
-
-        std.debug.print("Adding {s} with inputs {any} and outputs {any}", .{@tagName(gate_type), created_gate, outputs});
     }
 
     pub fn tick(self: *Module) errors.SimulationError!void {
@@ -97,7 +95,6 @@ pub const Module = struct {
     }
 
     pub fn containsNode(self: *Module, node_name: []const u8) bool {
-        std.debug.print("{s}", .{node_name});
         return self.nodes.contains(node_name);
     }
 

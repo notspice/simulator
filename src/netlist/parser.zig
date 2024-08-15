@@ -221,7 +221,6 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
         }
 
         _ = module_netlist.orderedRemove(0); // remove the second separator (->)
-        // std.debug.print("{s}\n", .{module_netlist.items});
 
         var outputs: std.ArrayList(std.ArrayList(u8)) = std.ArrayList(std.ArrayList(u8)).init(alloc);
         defer stringutils.deinitArrOfStrings(outputs);
@@ -258,6 +257,4 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
     }
 
     try simulator.add_module(created_module);
-
-    std.debug.print("{s}\n", .{module_netlist.items});
 }

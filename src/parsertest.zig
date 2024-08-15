@@ -87,9 +87,9 @@ test "parser" {
         });
 
         try simulator.tick();
-        // try simulator.tick();
-        // try simulator.tick();
-        // try simulator.tick();
+        try simulator.tick();
+        try simulator.tick();
+        try simulator.tick();
 
         // try expect(simulator.getNodeStateString("out_c3") == outputs[i][0]);
         // try expect(simulator.getNodeStateString("out_c2") == outputs[i][1]);
