@@ -20,13 +20,9 @@ const TokenType = enum {
 };
 
 /// Takes the text representation of the netlist and transforms it into appropriately connected Nodes and Gates
-pub fn parseNetlist(simulator: *Simulator, text_netlist: [*:0]const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
-    // Convert 0-terminated string to a Zig slice.
-    const text_netlist_length = std.mem.len(text_netlist);
-    const text_netlist_slice = text_netlist[0..text_netlist_length];
-
+pub fn parseNetlist(simulator: *Simulator, text_netlist: []const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!void {
     // Separate the input text into lines.
-    var lines = std.mem.tokenizeAny(u8, text_netlist_slice, "\n");
+    var lines = std.mem.tokenizeAny(u8, text_netlist, "\n");
     var line_num: usize = 0;
 
     var inside_module:    bool = false; // Interpreting the contents of a module

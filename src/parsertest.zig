@@ -7,7 +7,7 @@ const expectError = std.testing.expectError;
 const Simulator = @import("simulator.zig").Simulator;
 
 test "parser" {
-    const text_netlist: [*:0]const u8 =
+    const text_netlist: []const u8 =
         \\@MODULE multiplexer {
         // \\INPUT :                     -> in_a1
         // \\INPUT :                     -> in_a0

@@ -30,7 +30,7 @@ pub const Simulator = struct {
     modules: std.ArrayList(module.Module),
 
     /// Initializes the Simulator object. Allocates memory for the Nodes' and Gates' lists and builds the internal netlist based on the provided text representation
-    pub fn init(text_netlist: [*:0]const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!Self {
+    pub fn init(text_netlist: []const u8, alloc: std.mem.Allocator) (errors.ParserError || std.mem.Allocator.Error)!Self {
         var simulator: Self = .{
             .circuit_name = &.{},
             .modules = std.ArrayList(module.Module).init(alloc)
