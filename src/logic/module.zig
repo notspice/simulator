@@ -72,6 +72,12 @@ pub const Module = struct {
         }
 
         std.debug.print("Adding {s} with inputs {any} and outputs {any}", .{@tagName(gate_type), created_gate, outputs.items});
+        // for (inputs.items) |*input| {
+        //     input.deinit();
+        // }
+        for (outputs.items) |*output| {
+            output.deinit();
+        }
         // inputs.deinit();
         outputs.deinit();
     }
