@@ -50,12 +50,11 @@ pub const Module = struct {
     // Adds a gate to the module and connects all neccessary nodes
     pub fn add_gate(self: *Module, alloc: std.mem.Allocator, gate_type: gate.GateType, inputs: std.ArrayList(std.ArrayList(u8)), outputs: std.ArrayList(std.ArrayList(u8))) (std.mem.Allocator.Error || errors.ParserError)!void {
         var gate_inputs = std.ArrayList(simulator.NodeIndex).init(alloc);
-        defer gate_inputs.deinit();
+        // defer gate_inputs.deinit();
 
         for (inputs.items) |input| {
             try add_node(self, alloc, input);
             if (self.nodes.getIndex(input.items)) |node_index| {
-                std.debug.print("{d}\n", .{node_index});
                 try gate_inputs.append(node_index);
             } else {
                 return errors.ParserError.NodeNotFound; // Unreachable in theory
@@ -69,12 +68,11 @@ pub const Module = struct {
             try add_node(self, alloc, output);
             if (self.nodes.getPtr(output.items)) |captured_node| {
                 try captured_node.add_driver(self.gates.items.len - 1);
-                std.debug.print("{any}\n", .{captured_node.drivers.items});
             }
         }
 
         std.debug.print("Adding {s} with inputs {any} and outputs {any}", .{@tagName(gate_type), created_gate, outputs.items});
-        inputs.deinit();
+        // inputs.deinit();
         outputs.deinit();
     }
 

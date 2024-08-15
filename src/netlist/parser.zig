@@ -181,7 +181,6 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
     _ = module_netlist.orderedRemove(0); // Remove the module type from the netlist
 
     var name: std.ArrayList(u8) = std.ArrayList(u8).init(alloc); 
-    defer name.deinit();
     while (!std.mem.eql(u8, module_netlist.items[0], "{")) {
         try name.appendSlice(module_netlist.orderedRemove(0));
     }
@@ -228,6 +227,7 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
             }
             try outputs.append(output_list);
         }
+        std.debug.print("{any}\n", .{inputs.items});
         var last_output_list = std.ArrayList(u8).init(alloc);
         for (module_netlist.orderedRemove(0)) |char| {
             if (char != ';')
@@ -236,6 +236,7 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
         try outputs.append(last_output_list);
 
         try created_module.add_gate(alloc, instance_type, inputs, outputs);
+        std.debug.print("{any}\n", .{inputs.items});
     }
 
     try simulator.add_module(created_module);
