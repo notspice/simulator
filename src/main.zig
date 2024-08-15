@@ -9,6 +9,70 @@ pub fn main() !void {
     std.debug.print(":)", .{});
 }
 
+test "adder" {
+    const text_netlist: []const u8 =
+        \\@MODULE fulladder {
+        // \\INPUT :                     -> in_a
+        // \\INPUT :                     -> in_b
+        // \\INPUT :                     -> in_carry
+        \\AND   : in_a      in_b      -> carry_1st;
+        \\XOR   : in_a      in_b      -> half_sum;
+        \\AND   : half_sum  in_carry  -> carry_2nd;
+        \\XOR   : half_sum  in_carry  -> out_sum;
+        \\OR    : carry_1st carry_2nd -> out_carry;
+        \\}
+    ;
+
+    const input_scenarios = [8][3]bool{
+        .{ false, false, false },
+        .{ false, false, true },
+        .{ false, true, false },
+        .{ false, true, true },
+        .{ true, false, false },
+        .{ true, false, true },
+        .{ true, true, false },
+        .{ true, true, true },
+    };
+
+    const outputs = [8][2]bool {
+        .{ false, false },
+        .{ false, true },
+        .{ false, true },
+        .{ true, false },
+        .{ false, true },
+        .{ true, false },
+        .{ true, false },
+        .{ true, true },
+    };
+
+    testutils.testTitle("Full adder test");
+
+    for (0.., input_scenarios) |i, input_scenario| {
+        var simulator = try Simulator.init(text_netlist, std.testing.allocator);
+        defer simulator.deinit();
+        
+        simulator.setNodeStateString("in_a", input_scenario[0]);
+        simulator.setNodeStateString("in_b", input_scenario[1]);
+        simulator.setNodeStateString("in_carry", input_scenario[2]);
+
+        try simulator.tick();
+        try simulator.tick();
+        try simulator.tick();
+        try simulator.tick();
+
+        try expect(simulator.getNodeStateString("out_carry") == outputs[i][0]);
+        try expect(simulator.getNodeStateString("out_sum") == outputs[i][1]);
+
+        std.debug.print("Inputs: <{d} {d} {d}>\nCarry out: {d} Sum: {d}\n\n", .{
+            @intFromBool(simulator.getNodeStateString("in_a")),
+            @intFromBool(simulator.getNodeStateString("in_b")),
+            @intFromBool(simulator.getNodeStateString("in_carry")),
+            @intFromBool(simulator.getNodeStateString("out_carry")),
+            @intFromBool(simulator.getNodeStateString("out_sum"))
+        });
+    }
+}
+
 // test "2-bit multiplier" {
 //     const text_netlist: [*:0]const u8 =
 //         \\2-bit multiplier
