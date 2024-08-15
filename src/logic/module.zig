@@ -21,9 +21,12 @@ pub const Module = struct {
     node_names: std.ArrayList(std.ArrayList(u8)),
     gates: std.ArrayList(gate.Gate),
 
-    pub fn init(alloc: std.mem.Allocator, module_type: ModuleType, name: std.ArrayList(u8)) std.mem.Allocator.Error!Module {
+    pub fn init(alloc: std.mem.Allocator, module_type: ModuleType, name: []const u8) std.mem.Allocator.Error!Module {
+        var name_owned = std.ArrayList(u8).init(alloc);
+        try name_owned.appendSlice(name);
+
         return Module {
-            .name = name,
+            .name = name_owned,
             .module_type = module_type,
             .nodes = std.StringArrayHashMap(Node).init(alloc),
             .node_names = std.ArrayList(std.ArrayList(u8)).init(alloc),

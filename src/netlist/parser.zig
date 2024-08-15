@@ -182,13 +182,14 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
 
     var name: std.ArrayList(u8) = std.ArrayList(u8).init(alloc); 
     defer name.deinit();
+    
     while (!std.mem.eql(u8, module_netlist.items[0], "{")) {
         try name.appendSlice(module_netlist.orderedRemove(0));
     }
 
     _ = module_netlist.orderedRemove(0);
 
-    var created_module: module.Module = try module.Module.init(alloc, module_type.?, name);
+    var created_module: module.Module = try module.Module.init(alloc, module_type.?, name.items);
         // std.debug.print("{s}\n", .{module_netlist.items});
 
     while (!finished) {
