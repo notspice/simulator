@@ -88,10 +88,13 @@ pub const Module = struct {
         }
     }
 
-    pub fn tick(self: *Module) errors.SimulationError!void {
+    pub fn update_all(self: *Module) errors.SimulationError!void {
         for (self.nodes.keys()) |key| {
             try self.nodes.getPtr(key).?.update(.WireOr, &self.gates, &self.nodes);
         }
+    }
+
+    pub fn advance_all(self: *Module) void {
         for (self.nodes.keys()) |key| {
             self.nodes.getPtr(key).?.advance();
         }

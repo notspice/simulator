@@ -59,7 +59,10 @@ pub const Simulator = struct {
     /// Calculates the new states of all Nodes, advancing the simulation by one step
     pub fn tick(self: *Self) errors.SimulationError!void {
         for (self.modules.items) |*executed_module| {
-            try executed_module.tick();
+            try executed_module.update_all();
+        }
+        for (self.modules.items) |*executed_module| {
+            executed_module.advance_all();
         }
     }
 
