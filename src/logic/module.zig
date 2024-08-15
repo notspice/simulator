@@ -90,7 +90,10 @@ pub const Module = struct {
 
     pub fn tick(self: *Module) errors.SimulationError!void {
         for (self.nodes.keys()) |key| {
-            try self.nodes.getPtr(key).?.*.update(.WireOr, &self.gates, &self.nodes);
+            try self.nodes.getPtr(key).?.update(.WireOr, &self.gates, &self.nodes);
+        }
+        for (self.nodes.keys()) |key| {
+            self.nodes.getPtr(key).?.advance();
         }
     }
 
