@@ -41,9 +41,9 @@ pub const Gate = union(GateType) {
     Buf: std.ArrayList(NodeIndex),
 
     /// Initializes the Gate object. Accepts an externally allocated list of pointers to Node, takes responsibility for deallocating. Must be deinitialized using .deinit()
-    pub fn init(gate_type: GateType, input_nodes: std.ArrayList(NodeIndex)) errors.GateInitError!Self {
+    pub fn init(gate_type: GateType, input_nodes: []NodeIndex, alloc: std.mem.Allocator) (std.mem.Allocator.Error||errors.GateInitError)!Self {
         // Check if the number of inputs is correct for the given gate type
-        const input_nodes_count = input_nodes.items.len;
+        const input_nodes_count = input_nodes.len;
         const input_nodes_count_valid = switch (gate_type) {
             .And => input_nodes_count >= 2,
             .Or => input_nodes_count >= 2,
@@ -57,20 +57,22 @@ pub const Gate = union(GateType) {
         };
 
         if (!input_nodes_count_valid) {
-            input_nodes.deinit();
             return errors.GateInitError.WrongNumberOfInputs;
         }
 
-        return switch (gate_type) {
-            .And => Self{ .And = input_nodes },
-            .Or => Self{ .Or = input_nodes },
-            .Xor => Self{ .Xor = input_nodes },
-            .Nand => Self{ .Nand = input_nodes },
-            .Nor => Self{ .Nor = input_nodes },
-            .Xnor => Self{ .Xnor = input_nodes },
+        var input_nodes_owned = std.ArrayList(NodeIndex).init(alloc);
+        try input_nodes_owned.appendSlice(input_nodes);
 
-            .Not => Self{ .Not = input_nodes },
-            .Buf => Self{ .Buf = input_nodes },
+        return switch (gate_type) {
+            .And => Self{ .And = input_nodes_owned },
+            .Or => Self{ .Or = input_nodes_owned },
+            .Xor => Self{ .Xor = input_nodes_owned },
+            .Nand => Self{ .Nand = input_nodes_owned },
+            .Nor => Self{ .Nor = input_nodes_owned },
+            .Xnor => Self{ .Xnor = input_nodes_owned },
+
+            .Not => Self{ .Not = input_nodes_owned },
+            .Buf => Self{ .Buf = input_nodes_owned },
         };
     }
 

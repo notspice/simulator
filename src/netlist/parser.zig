@@ -181,6 +181,7 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
     _ = module_netlist.orderedRemove(0); // Remove the module type from the netlist
 
     var name: std.ArrayList(u8) = std.ArrayList(u8).init(alloc); 
+    defer name.deinit();
     while (!std.mem.eql(u8, module_netlist.items[0], "{")) {
         try name.appendSlice(module_netlist.orderedRemove(0));
     }
@@ -208,6 +209,8 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
         // std.debug.print("{s}\n", .{module_netlist.items});
 
         var inputs: std.ArrayList(std.ArrayList(u8)) = std.ArrayList(std.ArrayList(u8)).init(alloc);
+        defer stringutils.deinitArrOfStrings(inputs);
+
         while (!std.mem.eql(u8, module_netlist.items[0], "->")) {
             var input_list = std.ArrayList(u8).init(alloc);
             for (module_netlist.orderedRemove(0)) |char| {
@@ -220,6 +223,8 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
         // std.debug.print("{s}\n", .{module_netlist.items});
 
         var outputs: std.ArrayList(std.ArrayList(u8)) = std.ArrayList(std.ArrayList(u8)).init(alloc);
+        defer stringutils.deinitArrOfStrings(outputs);
+
         while (!std.mem.endsWith(u8, module_netlist.items[0], ";")) {
             var output_list = std.ArrayList(u8).init(alloc);
             for (module_netlist.orderedRemove(0)) |char| {
@@ -227,7 +232,6 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
             }
             try outputs.append(output_list);
         }
-        std.debug.print("{any}\n", .{inputs.items});
         var last_output_list = std.ArrayList(u8).init(alloc);
         for (module_netlist.orderedRemove(0)) |char| {
             if (char != ';')
@@ -235,9 +239,24 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
         }
         try outputs.append(last_output_list);
 
-        try created_module.add_gate(alloc, instance_type, inputs, outputs);
-        std.debug.print("{any}\n", .{inputs.items});
+        var inputs_slices = std.ArrayList([]const u8).init(alloc);
+        defer inputs_slices.deinit();
+
+        for (inputs.items) |input| {
+            try inputs_slices.append(input.items);
+        }
+
+        var outputs_slices = std.ArrayList([]const u8).init(alloc);
+        defer outputs_slices.deinit();
+
+        for (outputs.items) |output| {
+            try outputs_slices.append(output.items);
+        }
+
+        try created_module.add_gate(alloc, instance_type, inputs_slices.items, outputs_slices.items);
     }
 
     try simulator.add_module(created_module);
+
+    std.debug.print("{s}\n", .{module_netlist.items});
 }

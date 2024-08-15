@@ -64,11 +64,10 @@ test "parser" {
 
     testutils.testTitle("Multiplier test");
 
-    for (0.., input_scenarios) |i, input_scenario| {
+    for (input_scenarios) |input_scenario| {
         var simulator = try Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
 
-        _ = i;
         _ = outputs;
 
         simulator.setNodeStateString("in_a1", input_scenario[0]);

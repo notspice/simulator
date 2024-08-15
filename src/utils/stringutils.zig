@@ -30,6 +30,13 @@ pub fn pascal(str: []const u8, alloc: std.mem.Allocator) std.mem.Allocator.Error
     return str_pascal;
 }
 
+pub fn deinitArrOfStrings(arr: std.ArrayList(std.ArrayList(u8))) void {
+    for (arr.items) |item| {
+        item.deinit();
+    }
+    arr.deinit();
+}
+
 test "strip" {
     try expect(std.mem.eql(u8, strip("   bajo "), "bajo"));
     try expect(std.mem.eql(u8, strip("\n jajo \t"), "jajo"));
