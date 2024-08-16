@@ -18,6 +18,7 @@ pub const Module = struct {
     name: std.ArrayList(u8),
     module_type: ModuleType,
     nodes: std.StringArrayHashMap(Node),
+    inputs: std.BufSet,
     node_names: std.ArrayList(std.ArrayList(u8)),
     gates: std.ArrayList(gate.Gate),
 
@@ -30,7 +31,8 @@ pub const Module = struct {
             .module_type = module_type,
             .nodes = std.StringArrayHashMap(Node).init(alloc),
             .node_names = std.ArrayList(std.ArrayList(u8)).init(alloc),
-            .gates = std.ArrayList(gate.Gate).init(alloc)
+            .gates = std.ArrayList(gate.Gate).init(alloc),
+            .inputs = std.BufSet.init(alloc),
         };
     }
 
@@ -48,6 +50,7 @@ pub const Module = struct {
         self.nodes.deinit();
         self.gates.deinit();
         self.name.deinit();
+        self.inputs.deinit();
     }
 
     pub fn add_node(self: *Module, alloc: std.mem.Allocator, name: []const u8) std.mem.Allocator.Error!void {
@@ -60,6 +63,20 @@ pub const Module = struct {
             const node_name_slice = self.node_names.items[node_name_index].items;
 
             try self.nodes.put(node_name_slice, Node.init(alloc));
+        }
+    }
+
+    pub fn add_input(self: *Module, alloc: std.mem.Allocator, name: []const u8) std.mem.Allocator.Error!void {
+        if (!self.nodes.contains(name)) {
+            var node_name_owned = std.ArrayList(u8).init(alloc);
+            try node_name_owned.appendSlice(name);
+
+            try self.node_names.append(node_name_owned);
+            const node_name_index = self.node_names.items.len - 1;
+            const node_name_slice = self.node_names.items[node_name_index].items;
+
+            try self.nodes.put(node_name_slice, Node.init(alloc));
+            try self.inputs.insert(node_name_slice);
         }
     }
 
@@ -90,13 +107,17 @@ pub const Module = struct {
 
     pub fn update_all(self: *Module) errors.SimulationError!void {
         for (self.nodes.keys()) |key| {
-            try self.nodes.getPtr(key).?.update(.WireOr, &self.gates, &self.nodes);
+            if (!self.inputs.contains(key)) {
+                try self.nodes.getPtr(key).?.update(.WireOr, &self.gates, &self.nodes);
+            }
         }
     }
 
     pub fn advance_all(self: *Module) void {
         for (self.nodes.keys()) |key| {
-            self.nodes.getPtr(key).?.advance();
+            if (!self.inputs.contains(key)) {
+                self.nodes.getPtr(key).?.advance();
+            }
         }
     }
 
@@ -109,6 +130,6 @@ pub const Module = struct {
     }
 
     pub fn setNodeStatus(self: *Module, node_name: []const u8, state: bool) void {
-        self.nodes.getPtr(node_name).?.state = state;
+        self.nodes.getPtr(node_name).?.set_state(state);
     }
 };

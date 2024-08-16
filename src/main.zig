@@ -12,10 +12,7 @@ pub fn main() !void {
 test "adder" {
     const text_netlist: []const u8 =
         \\@MODULE fulladder {
-        // \\INPUT :                     -> in_a
-        // \\INPUT :                     -> in_b
-        // \\INPUT :                     -> in_carry
-        \\@IN   : in_a;
+        \\@IN   : in_a in_b in_carry;
         \\AND   : in_a      in_b      -> carry_1st;
         \\XOR   : in_a      in_b      -> half_sum;
         \\AND   : half_sum  in_carry  -> carry_2nd;
@@ -46,9 +43,12 @@ test "adder" {
         .{ true, true },
     };
 
+    // _ =outputs;
+
     testutils.testTitle("Full adder test");
 
     for (0.., input_scenarios) |i, input_scenario| {
+        // _ = i;
         var simulator = try Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
         

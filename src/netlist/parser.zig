@@ -216,12 +216,23 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
             try inputs.append(input_list);
         }
 
-        _ = module_netlist.orderedRemove(0); // remove the second separator (->)
+        const outputless = std.mem.endsWith(u8, module_netlist.items[0], ";");
+
+        if (!outputless) {
+            _ = module_netlist.orderedRemove(0); // remove the second separator (->)
+        } else {
+            var last_input_list = std.ArrayList(u8).init(alloc);
+            for (module_netlist.orderedRemove(0)) |char| {
+                if (char != ';')
+                try last_input_list.append(char);
+            }
+            try inputs.append(last_input_list);
+        }
 
         var outputs: std.ArrayList(std.ArrayList(u8)) = std.ArrayList(std.ArrayList(u8)).init(alloc);
         defer stringutils.deinitArrOfStrings(outputs);
 
-        if (module_netlist.items.len > 0) {
+        if (module_netlist.items.len > 0 and !outputless) {
             while (!std.mem.endsWith(u8, module_netlist.items[0], ";")) {
                 var output_list = std.ArrayList(u8).init(alloc);
                 for (module_netlist.orderedRemove(0)) |char| {
@@ -252,6 +263,7 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
         }
 
         if (!directive_instance and instance_type != null) {
+            // std.debug.print("{s}\n", .{ module_netlist.items });
             try created_module.add_gate(alloc, instance_type.?, inputs_slices.items, outputs_slices.items);
         } else {
             const directive_name = try stringutils.pascal(name_pascal[1..name_pascal.len], alloc);
@@ -259,7 +271,7 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
             const directive_type: directive.DirectiveType = inline for (@typeInfo(directive.DirectiveType).Enum.fields) |d_type| {
                 if (std.mem.eql(u8, directive_name, d_type.name)) break @enumFromInt(d_type.value);
             } else return errors.ParserError.InvalidGateType;
-            try directive.Directive.init(directive_type, simulator, &created_module, inputs_slices.items, if (outputs_slices.items.len == 0) null else outputs_slices.items, alloc);
+            _ = try directive.Directive.init(directive_type, simulator, &created_module, inputs_slices.items, if (outputs_slices.items.len == 0) null else outputs_slices.items, alloc);
         }
     }
 

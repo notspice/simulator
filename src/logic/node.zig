@@ -79,4 +79,8 @@ pub const Node = struct {
     pub fn advance(self: *Self) void {
         self.state = self.new_state;
     }
+
+    pub fn set_state(self: *Self, target_state: bool) void {
+        self.state = target_state;
+    }
 };
