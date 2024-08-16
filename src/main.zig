@@ -15,6 +15,7 @@ test "adder" {
         // \\INPUT :                     -> in_a
         // \\INPUT :                     -> in_b
         // \\INPUT :                     -> in_carry
+        \\@IN   : in_a;
         \\AND   : in_a      in_b      -> carry_1st;
         \\XOR   : in_a      in_b      -> half_sum;
         \\AND   : half_sum  in_carry  -> carry_2nd;

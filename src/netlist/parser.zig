@@ -7,6 +7,7 @@ const stringutils = @import("../utils/stringutils.zig");
 const gate = @import("../logic/gate.zig");
 const node = @import("../logic/node.zig");
 const module = @import("../logic/module.zig");
+const directive = @import("./directive.zig");
 
 const TokenType = enum {
     Keyword,
@@ -186,29 +187,28 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
     _ = module_netlist.orderedRemove(0);
 
     var created_module: module.Module = try module.Module.init(alloc, module_type.?, name.items);
-        // std.debug.print("{s}\n", .{module_netlist.items});
 
     while (!finished) {
         if (std.mem.eql(u8, module_netlist.items[0], "}")) {
             finished = true;
             break;
         }
-        // std.debug.print("{s}\n", .{module_netlist.items});
 
         const name_pascal = try stringutils.pascal(module_netlist.orderedRemove(0), alloc);
         defer alloc.free(name_pascal);
 
-        const instance_type: gate.GateType = inline for (@typeInfo(gate.GateType).Enum.fields) |g_type| {
-            if (std.mem.eql(u8, name_pascal, g_type.name)) break @enumFromInt(g_type.value);
-        } else return errors.ParserError.InvalidGateType;
+        const directive_instance = std.mem.startsWith(u8, name_pascal, "@");
+
+        const instance_type: ?gate.GateType = inline for (@typeInfo(gate.GateType).Enum.fields) |g_type| {
+                if (std.mem.eql(u8, name_pascal, g_type.name)) break @enumFromInt(g_type.value);
+            } else null;
 
         _ = module_netlist.orderedRemove(0); // remove the first separator (eg. AND >>:<< in_1 in_2 -> out_1)
-        // std.debug.print("{s}\n", .{module_netlist.items});
 
         var inputs: std.ArrayList(std.ArrayList(u8)) = std.ArrayList(std.ArrayList(u8)).init(alloc);
         defer stringutils.deinitArrOfStrings(inputs);
 
-        while (!std.mem.eql(u8, module_netlist.items[0], "->")) {
+        while (!std.mem.eql(u8, module_netlist.items[0], "->") and !std.mem.endsWith(u8, module_netlist.items[0], ";")) {
             var input_list = std.ArrayList(u8).init(alloc);
             for (module_netlist.orderedRemove(0)) |char| {
                 try input_list.append(char);
@@ -221,19 +221,21 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
         var outputs: std.ArrayList(std.ArrayList(u8)) = std.ArrayList(std.ArrayList(u8)).init(alloc);
         defer stringutils.deinitArrOfStrings(outputs);
 
-        while (!std.mem.endsWith(u8, module_netlist.items[0], ";")) {
-            var output_list = std.ArrayList(u8).init(alloc);
-            for (module_netlist.orderedRemove(0)) |char| {
-                try output_list.append(char);
+        if (module_netlist.items.len > 0) {
+            while (!std.mem.endsWith(u8, module_netlist.items[0], ";")) {
+                var output_list = std.ArrayList(u8).init(alloc);
+                for (module_netlist.orderedRemove(0)) |char| {
+                    try output_list.append(char);
+                }
+                try outputs.append(output_list);
             }
-            try outputs.append(output_list);
+            var last_output_list = std.ArrayList(u8).init(alloc);
+            for (module_netlist.orderedRemove(0)) |char| {
+                if (char != ';')
+                try last_output_list.append(char);
+            }
+            try outputs.append(last_output_list);
         }
-        var last_output_list = std.ArrayList(u8).init(alloc);
-        for (module_netlist.orderedRemove(0)) |char| {
-            if (char != ';')
-            try last_output_list.append(char);
-        }
-        try outputs.append(last_output_list);
 
         var inputs_slices = std.ArrayList([]const u8).init(alloc);
         defer inputs_slices.deinit();
@@ -249,7 +251,16 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
             try outputs_slices.append(output.items);
         }
 
-        try created_module.add_gate(alloc, instance_type, inputs_slices.items, outputs_slices.items);
+        if (!directive_instance and instance_type != null) {
+            try created_module.add_gate(alloc, instance_type.?, inputs_slices.items, outputs_slices.items);
+        } else {
+            const directive_name = try stringutils.pascal(name_pascal[1..name_pascal.len], alloc);
+            defer alloc.free(directive_name);
+            const directive_type: directive.DirectiveType = inline for (@typeInfo(directive.DirectiveType).Enum.fields) |d_type| {
+                if (std.mem.eql(u8, directive_name, d_type.name)) break @enumFromInt(d_type.value);
+            } else return errors.ParserError.InvalidGateType;
+            try directive.Directive.init(directive_type, simulator, &created_module, inputs_slices.items, if (outputs_slices.items.len == 0) null else outputs_slices.items, alloc);
+        }
     }
 
     try simulator.add_module(created_module);
