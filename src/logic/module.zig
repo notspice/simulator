@@ -81,9 +81,12 @@ pub const Module = struct {
     }
 
     // Adds a gate to the module and connects all neccessary nodes
-    pub fn add_gate(self: *Module, alloc: std.mem.Allocator, gate_type: gate.GateType, inputs: [][]const u8, outputs: [][]const u8) (std.mem.Allocator.Error || errors.ParserError)!void {
+    pub fn add_gate(self: *Module, alloc: std.mem.Allocator, gate_type: gate.GateType, name: []const u8, inputs: [][]const u8, outputs: [][]const u8) (std.mem.Allocator.Error || errors.ParserError)!void {
         var gate_inputs = std.ArrayList(simulator.NodeIndex).init(alloc);
         defer gate_inputs.deinit();
+
+        // TODO: Do something with the name...
+        std.debug.print("Adding named gate: {s}\n", .{name});
 
         for (inputs) |input| {
             try self.add_node(alloc, input);

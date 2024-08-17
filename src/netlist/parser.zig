@@ -128,8 +128,9 @@ fn isTokenAllowed(token: TokenType, next_token: TokenType, inside_module: bool, 
                 if (!inside_instance and (
                     next_token == TokenType.Separator or
                     next_token == TokenType.CloseBracket or
-                    next_token == TokenType.Semicolon
-                )) return true; // Inside a module, but outside any instance, expect a separator or a closing character (eg. ADD >>:<< in_1 in_2 ...)
+                    next_token == TokenType.Semicolon or
+                    next_token == TokenType.Statement
+                )) return true; // Inside a module, but outside any instance, expect a separator or a closing character, or another statement (eg. ADD >>:<< in_1 in_2 ...)
                 if (inside_instance and (next_token == TokenType.Statement or next_token == TokenType.Separator)) return true; // Inside a module and an instance, expect another statement or a separator (eg. ADD : in_1 >>in_2<< ...)
             } else {
                 return (next_token == TokenType.Statement or next_token == TokenType.OpenBracket); // Outside a module and after a statement, expect another statement or an opening bracket (eg. @MODULE test >>{<<)
@@ -203,6 +204,8 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
                 if (std.mem.eql(u8, name_pascal, g_type.name)) break @enumFromInt(g_type.value);
             } else null;
 
+        const instance_name: []const u8 = if (std.mem.eql(u8, module_netlist.items[0], ":")) "0" else module_netlist.orderedRemove(0);
+
         _ = module_netlist.orderedRemove(0); // remove the first separator (eg. AND >>:<< in_1 in_2 -> out_1)
 
         var inputs: std.ArrayList(std.ArrayList(u8)) = std.ArrayList(std.ArrayList(u8)).init(alloc);
@@ -264,7 +267,7 @@ fn handleModule(simulator: *Simulator, module_netlist: *std.ArrayList([]const u8
 
         if (!directive_instance and instance_type != null) {
             // std.debug.print("{s}\n", .{ module_netlist.items });
-            try created_module.add_gate(alloc, instance_type.?, inputs_slices.items, outputs_slices.items);
+            try created_module.add_gate(alloc, instance_type.?, instance_name, inputs_slices.items, outputs_slices.items);
         } else {
             const directive_name = try stringutils.pascal(name_pascal[1..name_pascal.len], alloc);
             defer alloc.free(directive_name);
