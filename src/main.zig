@@ -9,6 +9,74 @@ pub fn main() !void {
     std.debug.print(":)", .{});
 }
 
+test "adder without parser" {
+    const text_netlist: []const u8 =
+        \\@MODULE fulladder {
+        \\@IN   : in_a in_b in_carry;
+        \\AND   : in_a      in_b      -> carry_1st;
+        \\XOR   : in_a      in_b      -> half_sum;
+        \\AND   : half_sum  in_carry  -> carry_2nd;
+        \\XOR   : half_sum  in_carry  -> out_sum;
+        \\OR    : carry_1st carry_2nd -> out_carry;
+        \\}
+    ;
+
+    const input_scenarios = [8][3]bool{
+        .{ false, false, false },
+        .{ false, false, true },
+        .{ false, true, false },
+        .{ false, true, true },
+        .{ true, false, false },
+        .{ true, false, true },
+        .{ true, true, false },
+        .{ true, true, true },
+    };
+
+    const outputs = [8][2]bool {
+        .{ false, false },
+        .{ false, true },
+        .{ false, true },
+        .{ true, false },
+        .{ false, true },
+        .{ true, false },
+        .{ true, false },
+        .{ true, true },
+    };
+
+    testutils.testTitle("Full adder test without parser");
+
+    for (0.., input_scenarios) |i, input_scenario| {
+        var simulator = try Simulator.init(text_netlist, std.testing.allocator);
+        defer simulator.deinit();
+
+        try simulator.graph.addGate(.And, "carry_1st", &.{"in_a", "in_b"}, &.{"carry_1st"}, std.testing.allocator);
+        try simulator.graph.addGate(.Xor, "half_sum", &.{"in_a", "in_b"}, &.{"half_sum"}, std.testing.allocator);
+        try simulator.graph.addGate(.And, "carry_2nd", &.{"half_sum", "in_carry"}, &.{"carry_2nd"}, std.testing.allocator);
+        try simulator.graph.addGate(.Xor, "out_sum", &.{"half_sum", "in_carry"}, &.{"out_sum"}, std.testing.allocator);
+        try simulator.graph.addGate(.Or, "out_carry", &.{"carry_1st", "carry_2nd"}, &.{"out_carry"}, std.testing.allocator);
+        
+        simulator.setNodeState("in_a", input_scenario[0]);
+        simulator.setNodeState("in_b", input_scenario[1]);
+        simulator.setNodeState("in_carry", input_scenario[2]);
+
+        try simulator.tick();
+        try simulator.tick();
+        try simulator.tick();
+        try simulator.tick();
+
+        try expect(simulator.getNodeState("out_carry") == outputs[i][0]);
+        try expect(simulator.getNodeState("out_sum") == outputs[i][1]);
+
+        std.debug.print("Inputs: <{d} {d} {d}>\nCarry out: {d} Sum: {d}\n\n", .{
+            @intFromBool(simulator.getNodeState("in_a")),
+            @intFromBool(simulator.getNodeState("in_b")),
+            @intFromBool(simulator.getNodeState("in_carry")),
+            @intFromBool(simulator.getNodeState("out_carry")),
+            @intFromBool(simulator.getNodeState("out_sum"))
+        });
+    }
+}
+
 test "adder" {
     const text_netlist: []const u8 =
         \\@MODULE fulladder {
@@ -49,24 +117,24 @@ test "adder" {
         var simulator = try Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
         
-        simulator.setNodeStateString("in_a", input_scenario[0]);
-        simulator.setNodeStateString("in_b", input_scenario[1]);
-        simulator.setNodeStateString("in_carry", input_scenario[2]);
+        simulator.setNodeState("in_a", input_scenario[0]);
+        simulator.setNodeState("in_b", input_scenario[1]);
+        simulator.setNodeState("in_carry", input_scenario[2]);
 
         try simulator.tick();
         try simulator.tick();
         try simulator.tick();
         try simulator.tick();
 
-        try expect(simulator.getNodeStateString("out_carry") == outputs[i][0]);
-        try expect(simulator.getNodeStateString("out_sum") == outputs[i][1]);
+        try expect(simulator.getNodeState("out_carry") == outputs[i][0]);
+        try expect(simulator.getNodeState("out_sum") == outputs[i][1]);
 
         std.debug.print("Inputs: <{d} {d} {d}>\nCarry out: {d} Sum: {d}\n\n", .{
-            @intFromBool(simulator.getNodeStateString("in_a")),
-            @intFromBool(simulator.getNodeStateString("in_b")),
-            @intFromBool(simulator.getNodeStateString("in_carry")),
-            @intFromBool(simulator.getNodeStateString("out_carry")),
-            @intFromBool(simulator.getNodeStateString("out_sum"))
+            @intFromBool(simulator.getNodeState("in_a")),
+            @intFromBool(simulator.getNodeState("in_b")),
+            @intFromBool(simulator.getNodeState("in_carry")),
+            @intFromBool(simulator.getNodeState("out_carry")),
+            @intFromBool(simulator.getNodeState("out_sum"))
         });
     }
 }
@@ -130,31 +198,31 @@ test "2-bit multiplier" {
         var simulator = try Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
 
-        simulator.setNodeStateString("in_a1", input_scenario[0]);
-        simulator.setNodeStateString("in_a0", input_scenario[1]);
-        simulator.setNodeStateString("in_b1", input_scenario[2]);
-        simulator.setNodeStateString("in_b0", input_scenario[3]);
+        simulator.setNodeState("in_a1", input_scenario[0]);
+        simulator.setNodeState("in_a0", input_scenario[1]);
+        simulator.setNodeState("in_b1", input_scenario[2]);
+        simulator.setNodeState("in_b0", input_scenario[3]);
 
         try simulator.tick();
         try simulator.tick();
         try simulator.tick();
         try simulator.tick();
 
-        try expect(simulator.getNodeStateString("out_c3") == outputs[i][0]);
-        try expect(simulator.getNodeStateString("out_c2") == outputs[i][1]);
-        try expect(simulator.getNodeStateString("out_c1") == outputs[i][2]);
-        try expect(simulator.getNodeStateString("out_c0") == outputs[i][3]);
+        try expect(simulator.getNodeState("out_c3") == outputs[i][0]);
+        try expect(simulator.getNodeState("out_c2") == outputs[i][1]);
+        try expect(simulator.getNodeState("out_c1") == outputs[i][2]);
+        try expect(simulator.getNodeState("out_c0") == outputs[i][3]);
 
         std.debug.print("Inputs: <{d} {d} {d} {d}>\nOutput: <{d} {d} {d} {d}>\n\n", .{
-            @intFromBool(simulator.getNodeStateString("in_a1")),
-            @intFromBool(simulator.getNodeStateString("in_a0")),
-            @intFromBool(simulator.getNodeStateString("in_b1")),
-            @intFromBool(simulator.getNodeStateString("in_b0")),
-            @intFromBool(simulator.getNodeStateString("out_c3")),
-            @intFromBool(simulator.getNodeStateString("out_c2")),
-            @intFromBool(simulator.getNodeStateString("out_c1")), 
-            @intFromBool(simulator.getNodeStateString("out_c0"))
-            });
+            @intFromBool(simulator.getNodeState("in_a1")),
+            @intFromBool(simulator.getNodeState("in_a0")),
+            @intFromBool(simulator.getNodeState("in_b1")),
+            @intFromBool(simulator.getNodeState("in_b0")),
+            @intFromBool(simulator.getNodeState("out_c3")),
+            @intFromBool(simulator.getNodeState("out_c2")),
+            @intFromBool(simulator.getNodeState("out_c1")), 
+            @intFromBool(simulator.getNodeState("out_c0"))
+        });
     }
 }
 
@@ -210,15 +278,15 @@ test "4-bit carry lookahead binary adder" {
         var simulator = try Simulator.init(text_netlist, std.testing.allocator);
         defer simulator.deinit();
 
-        simulator.setNodeStateString("in_a3", input_scenarios[i][0]);
-        simulator.setNodeStateString("in_a2", input_scenarios[i][1]);
-        simulator.setNodeStateString("in_a1", input_scenarios[i][2]);
-        simulator.setNodeStateString("in_a0", input_scenarios[i][3]);
-        simulator.setNodeStateString("in_b3", input_scenarios[i][4]);
-        simulator.setNodeStateString("in_b2", input_scenarios[i][5]);
-        simulator.setNodeStateString("in_b1", input_scenarios[i][6]);
-        simulator.setNodeStateString("in_b0", input_scenarios[i][7]);
-        simulator.setNodeStateString("in_carry", input_scenarios[i][8]);
+        simulator.setNodeState("in_a3", input_scenarios[i][0]);
+        simulator.setNodeState("in_a2", input_scenarios[i][1]);
+        simulator.setNodeState("in_a1", input_scenarios[i][2]);
+        simulator.setNodeState("in_a0", input_scenarios[i][3]);
+        simulator.setNodeState("in_b3", input_scenarios[i][4]);
+        simulator.setNodeState("in_b2", input_scenarios[i][5]);
+        simulator.setNodeState("in_b1", input_scenarios[i][6]);
+        simulator.setNodeState("in_b0", input_scenarios[i][7]);
+        simulator.setNodeState("in_carry", input_scenarios[i][8]);
 
         try simulator.tick();
         try simulator.tick();
@@ -243,24 +311,23 @@ test "4-bit carry lookahead binary adder" {
             @intFromBool(outputs[i][4])
             });
         std.debug.print("                  - {d} {d} {d} {d} {d}\n", .{
-            @intFromBool(simulator.getNodeStateString("xor_7")),
-            @intFromBool(simulator.getNodeStateString("xor_6")),
-            @intFromBool(simulator.getNodeStateString("xor_5")),
-            @intFromBool(simulator.getNodeStateString("xor_4")),
-            @intFromBool(simulator.getNodeStateString("or_3"))
+            @intFromBool(simulator.getNodeState("xor_7")),
+            @intFromBool(simulator.getNodeState("xor_6")),
+            @intFromBool(simulator.getNodeState("xor_5")),
+            @intFromBool(simulator.getNodeState("xor_4")),
+            @intFromBool(simulator.getNodeState("or_3"))
         });
         std.debug.print("{d} - {d}\n", .{
-            @intFromBool(simulator.getNodeStateString("or_1")),
-            @intFromBool(simulator.getNodeStateString("and_6"))
+            @intFromBool(simulator.getNodeState("or_1")),
+            @intFromBool(simulator.getNodeState("and_6"))
         });
     
-        try expect(simulator.getNodeStateString("xor_7") == outputs[i][0]);
-        try expect(simulator.getNodeStateString("xor_6") == outputs[i][1]);
-        try expect(simulator.getNodeStateString("xor_5") == outputs[i][2]);
-        try expect(simulator.getNodeStateString("xor_4") == outputs[i][3]);
-        try expect(simulator.getNodeStateString("or_3") == outputs[i][4]);
+        try expect(simulator.getNodeState("xor_7") == outputs[i][0]);
+        try expect(simulator.getNodeState("xor_6") == outputs[i][1]);
+        try expect(simulator.getNodeState("xor_5") == outputs[i][2]);
+        try expect(simulator.getNodeState("xor_4") == outputs[i][3]);
+        try expect(simulator.getNodeState("or_3") == outputs[i][4]);
     }
-
 }
 
 // test "adder" {

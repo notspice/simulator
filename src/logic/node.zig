@@ -2,10 +2,11 @@ const std = @import("std");
 
 const gate = @import("gate.zig");
 const errors = @import("../utils/errors.zig");
-const GateIndex = @import("../simulator.zig").GateIndex;
 
 const expect = std.testing.expect;
 const expectError = std.testing.expectError;
+
+pub const NodeIndex   = usize;
 
 /// Logic function performed by the wire
 pub const WireFunction = enum {
@@ -28,19 +29,19 @@ pub const Node = struct {
     /// Current state of the node
     state: bool,
     /// List of references to gates that drive this Node
-    drivers: std.ArrayList(GateIndex),
+    drivers: std.ArrayList(gate.GateIndex),
 
     /// Initialize the Node object, allocating memory for the drivers' list
     pub fn init(alloc: std.mem.Allocator) Self {
         return Self{ 
             .state = false,
             .new_state = false,
-            .drivers = std.ArrayList(GateIndex).init(alloc) 
+            .drivers = std.ArrayList(gate.GateIndex).init(alloc) 
         };
     }
 
     /// Connect the output of a gate to this Node
-    pub fn add_driver(self: *Self, gate_index: GateIndex) std.mem.Allocator.Error!void {
+    pub fn addDriver(self: *Self, gate_index: gate.GateIndex) std.mem.Allocator.Error!void {
         try self.drivers.append(gate_index);
     }
 
@@ -50,12 +51,12 @@ pub const Node = struct {
     }
 
     /// Update the state of the Node, based on the drivers' states and the selected wire function
-    pub fn update(self: *Self, wire_function: WireFunction, gates: *std.ArrayList(gate.Gate), nodes: *std.StringArrayHashMap(Node)) errors.SimulationError!void {
+    pub fn update(self: *Self, wire_function: WireFunction, gates: *std.StringArrayHashMap(gate.Gate), nodes: *std.StringArrayHashMap(Node)) errors.SimulationError!void {
         self.new_state = if(self.drivers.items.len == 0) self.state else switch (wire_function) {
             // Look for any driver that outputs 0 and set the state to 0 if any were found
             // If no driver outputs 0 (all output 1), set the state to 1
             .WireAnd => for (self.drivers.items) |driver_index| {
-                const processed_gate = gates.items[driver_index];
+                const processed_gate = gates.values()[driver_index];
                 if ((try processed_gate.output(nodes)) == false) break false;
             } else no_zeros: {
                 break :no_zeros true;
@@ -64,14 +65,14 @@ pub const Node = struct {
             // Look for any driver that outputs 1 and set the state to 1 if any were found
             // If no driver outputs 1 (all output 0), set the state to 0
             .WireOr => for (self.drivers.items) |driver_index| {
-                const processed_gate = gates.items[driver_index];
+                const processed_gate = gates.values()[driver_index];
                 if ((try processed_gate.output(nodes)) == true) break true;
             } else no_zeros: {
                 break :no_zeros false;
             },
 
             // If only one driver is allowed, return an error in case more drivers are attached
-            .WireUniqueDriver => if (self.drivers.items.len == 1) (try gates.items[0].output(nodes)) else return errors.SimulationError.TooManyNodeDrivers,
+            .WireUniqueDriver => if (self.drivers.items.len == 1) (try gates.values()[self.drivers.items[0]].output(nodes)) else return errors.SimulationError.TooManyNodeDrivers,
         };
     }
 
@@ -80,7 +81,11 @@ pub const Node = struct {
         self.state = self.new_state;
     }
 
-    pub fn set_state(self: *Self, target_state: bool) void {
+    pub fn getState(self: Self) bool {
+        return self.state;
+    }
+
+    pub fn setState(self: *Self, target_state: bool) void {
         self.state = target_state;
     }
 };

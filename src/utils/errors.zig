@@ -1,8 +1,7 @@
 pub const GateInitError = error {
     InvalidGateType,
     WrongNumberOfInputs,
-    UnnecessaryExternalState,
-    MissingExternalState,
+    AlreadyExists,
     NodeNotFound
 };
 pub const ParserError = error {

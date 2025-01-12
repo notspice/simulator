@@ -1,11 +1,12 @@
 const std = @import("std");
 
-const NodeIndex = @import("../simulator.zig").NodeIndex;
 const node = @import("node.zig");
 const errors = @import("../utils/errors.zig");
 
 const expect = std.testing.expect;
 const expectError = std.testing.expectError;
+
+pub const GateIndex   = usize;
 
 pub const GateType = enum {
     // Two-input gates
@@ -26,22 +27,22 @@ pub const Gate = union(GateType) {
     /// Alias for the type of this struct
     const Self = @This();
     /// Alias for the list of inputs
-    const InputList = std.ArrayList(NodeIndex);
+    const InputList = std.ArrayList(node.NodeIndex);
 
     // Two-input gates and their inputs
-    And: std.ArrayList(NodeIndex),
-    Or: std.ArrayList(NodeIndex),
-    Xor: std.ArrayList(NodeIndex),
-    Nand: std.ArrayList(NodeIndex),
-    Nor: std.ArrayList(NodeIndex),
-    Xnor: std.ArrayList(NodeIndex),
+    And: std.ArrayList(node.NodeIndex),
+    Or: std.ArrayList(node.NodeIndex),
+    Xor: std.ArrayList(node.NodeIndex),
+    Nand: std.ArrayList(node.NodeIndex),
+    Nor: std.ArrayList(node.NodeIndex),
+    Xnor: std.ArrayList(node.NodeIndex),
 
     // One-input gates
-    Not: std.ArrayList(NodeIndex),
-    Buf: std.ArrayList(NodeIndex),
+    Not: std.ArrayList(node.NodeIndex),
+    Buf: std.ArrayList(node.NodeIndex),
 
     /// Initializes the Gate object. Accepts an externally allocated list of pointers to Node, takes responsibility for deallocating. Must be deinitialized using .deinit()
-    pub fn init(gate_type: GateType, input_nodes: []NodeIndex, alloc: std.mem.Allocator) (std.mem.Allocator.Error||errors.GateInitError)!Self {
+    pub fn init(gate_type: GateType, input_nodes: []node.NodeIndex, alloc: std.mem.Allocator) (std.mem.Allocator.Error||errors.GateInitError)!Self {
         // Check if the number of inputs is correct for the given gate type
         const input_nodes_count = input_nodes.len;
         const input_nodes_count_valid = switch (gate_type) {
@@ -60,7 +61,7 @@ pub const Gate = union(GateType) {
             return errors.GateInitError.WrongNumberOfInputs;
         }
 
-        var input_nodes_owned = std.ArrayList(NodeIndex).init(alloc);
+        var input_nodes_owned = std.ArrayList(node.NodeIndex).init(alloc);
         try input_nodes_owned.appendSlice(input_nodes);
 
         return switch (gate_type) {
